@@ -14,6 +14,7 @@
   .s-cliente{background:rgba(63,185,80,.15);color:#56d364;}.s-lead{background:rgba(88,166,255,.15);color:#79c0ff;}
   .s-prospect{background:rgba(210,153,34,.15);color:#e3b341;}.s-outro{background:var(--panel2);color:var(--muted);}
   select.dono{padding:3px 7px;font-size:12px;border-radius:6px;}
+  table.tbl th:first-child, table.tbl td:first-child{max-width:280px;overflow:hidden;text-overflow:ellipsis;}
 </style>
 </head>
 <body>
@@ -42,13 +43,13 @@ if(u){
   var rows=[], sortKey="total_all", sortDir=-1;
   var COLS=[
     ["empresa","Empresa","t"],["segmento_primario","Segmento","t"],["status","Situação","s"],
-    ["origem","Origem","o"],["pool","Lista","t"],["vendedor_dono","Dono","t"],["uf","UF","t"],["municipio","Cidade","t"],
+    ["origem","Origem","o"],["pool","Lista","t"],["vendedor_dono","Vendedor","t"],["uf","UF","t"],["municipio","Cidade","t"],
     ["celular","Celular","t"],["ultima_compra","Últ. compra","t"],["ultimo_contato","Últ. contato","t"],["proxima_data","Próxima","t"],
     ["total_12m","12 meses","n"],["total_all","Total","n"]
   ];
   var fv=$("#fVend");
-  if(u.role==="admin"){ fv.innerHTML='<option value="">Todos os donos</option><option value="__GGE__">Carteira GGE (sem dono)</option><option>Francisco</option><option>Matheus</option><option>Lorena</option>'; }
-  else { fv.innerHTML='<option value="">Todos os donos</option><option value="__GGE__">Carteira GGE (sem dono)</option><option value="__MINE__">Meus clientes</option>'; }
+  if(u.role==="admin"){ fv.innerHTML='<option value="">Todos os vendedores</option><option value="__GGE__">Carteira GGE (sem dono)</option><option>Francisco</option><option>Matheus</option><option>Lorena</option>'; }
+  else { fv.innerHTML='<option value="">Todos os vendedores</option><option value="__GGE__">Carteira GGE (sem dono)</option><option value="__MINE__">Meus clientes</option>'; }
 
   window.carregar=async function(){
     $("#count").textContent="Carregando…";
@@ -77,6 +78,7 @@ if(u){
     $("#tbl tbody").innerHTML=rows.map(function(row){
       return "<tr>"+COLS.map(function(c){
         if(c[0]==="status") return "<td>"+stPill(row[c[0]])+"</td>";
+        if(c[0]==="empresa") return '<td title="'+esc(row.empresa||"")+'">'+fmt(row[c[0]],c[2])+"</td>";
         if(c[0]==="vendedor_dono"){
           var dono=row.vendedor_dono||"GGE";
           var opts=["GGE","Francisco","Matheus","Lorena"].map(function(o){return '<option'+(o===dono?" selected":"")+'>'+o+'</option>';}).join("");
@@ -97,7 +99,7 @@ if(u){
     var v=(val==="GGE")?null:val; el.disabled=true;
     var r=await sb.from("va_cliente_status").update({vendedor_dono:v,atualizado_em:new Date().toISOString()}).eq("documento",doc);
     el.disabled=false;
-    if(r.error){ alert("Erro ao mudar o dono: "+r.error.message); return; }
+    if(r.error){ alert("Erro ao mudar o vendedor: "+r.error.message); return; }
     for(var i=0;i<rows.length;i++){ if(rows[i].documento===doc){ rows[i].vendedor_dono=v; break; } }
     el.style.borderColor="#3fb950"; setTimeout(function(){ el.style.borderColor=""; },1200);
   };

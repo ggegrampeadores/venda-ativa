@@ -153,7 +153,7 @@ if(u){
     $("#mTitle").textContent=f.empresa||f.nome||f.documento;
     $("#mBody").innerHTML='<div class="kv">'
       +'<b>Documento</b> '+esc(f.documento)+' ('+esc(f.tipo_doc||"")+')<br><b>Origem</b> '+esc(f.origem||"—")+' · pool '+esc(f.pool||"—")+'<br>'
-      +'<b>Dono</b> '+esc(f.vendedor_dono||"(não atribuído)")+'<br><b>Segmento</b> '+esc(f.segmento_primario||"—")+'<br>'
+      +'<b>Vendedor</b> '+esc(f.vendedor_dono||"(não atribuído)")+'<br><b>Segmento</b> '+esc(f.segmento_primario||"—")+'<br>'
       +'<b>Contato</b> '+esc(f.pessoa_contato||"—")+'<br><b>Celular</b> '+esc(f.celular||"—")+' &nbsp; <b>Tel</b> '+esc(f.telefone||"—")+'<br>'
       +'<b>E-mail</b> '+esc(f.email||"—")+'<br><b>Cidade/UF</b> '+esc(f.municipio||"—")+(f.uf?"/"+f.uf:"")+'<br>'
       +'<b>Última compra</b> '+esc(f.ultima_compra||"—")+'<br><b>Próxima (sugerida)</b> '+esc(f.proxima_data||"—")+'<br>'

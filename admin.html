@@ -12,7 +12,7 @@
   .bar{display:grid;grid-template-columns:130px 1fr 44px;align-items:center;gap:10px;font-size:13px;}
   .track{height:9px;background:var(--panel2);border-radius:6px;overflow:hidden;}
   .fillb{height:100%;background:var(--blue);border-radius:6px;}
-  td.r,th.r{text-align:right;}
+  td.r,th.r{text-align:center;}
   td.v{font-weight:600;}
 </style>
 </head>
@@ -53,6 +53,8 @@ if(u){
     var linhas=vends.map(function(v){
       return '<tr><td class="v">'+v+'</td><td class="r">'+carteira(v)+'</td><td class="r">'+fila(v)+'</td><td class="r">'+tarefas(v)+'</td><td class="r" style="color:var(--green)">'+efetivos(v)+'</td></tr>';
     }).join("");
+    var carteiraGGE=C.filter(function(x){return !x.vendedor_dono && x.status==="cliente";}).length;
+    linhas+='<tr><td class="v" style="color:var(--muted)">Carteira GGE</td><td class="r">'+carteiraGGE+'</td><td class="r">—</td><td class="r">—</td><td class="r">—</td></tr>';
 
     var seg={}; C.forEach(function(x){ var s=x.segmento_primario||"—"; seg[s]=(seg[s]||0)+1; });
     var max=1; for(var k in seg) if(seg[k]>max)max=seg[k];
