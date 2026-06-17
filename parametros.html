@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parâmetros · Venda Ativa</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .grp{margin-bottom:18px;}
+  .grp h3{font-size:14px;font-weight:600;margin-bottom:4px;}
+  .grp .d{font-size:12px;color:var(--muted);margin-bottom:12px;}
+  .fields{display:flex;gap:16px;flex-wrap:wrap;}
+  .fld{display:flex;flex-direction:column;gap:5px;}
+  .fld label{font-size:12px;color:var(--muted);}
+  .fld input{width:120px;}
+  .bar{display:flex;gap:12px;align-items:center;margin-top:8px;}
+  .ok{font-size:13px;color:var(--green);opacity:0;transition:opacity .2s;}.ok.on{opacity:1;}
+</style>
+</head>
+<body>
+<div class="va-content">
+  <div class="va-h1">Parâmetros</div>
+  <div class="va-sub">A sala de comando. Aqui você define metas, pesos e regras — e o resto do sistema obedece.</div>
+  <div id="body"><div class="empty">Carregando…</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+var u=VA.montar("parametros.html");
+if(u){
+  var sb=VA.sb, esc=VA.esc, $=function(s){return document.querySelector(s);};
+  if(u.role!=="admin"){ $("#body").innerHTML='<div class="card">Esta página é só do Administrador.</div>'; }
+  else {
+    var P={};
+    function num(id,val,w){ return '<div class="fld"><label>'+id[1]+'</label><input type="number" id="'+id[0]+'" value="'+val+'"'+(w?' style="width:'+w+'px"':'')+'></div>'; }
+    load();
+    async function load(){
+      var r=await sb.from("va_parametros").select("*");
+      if(r.error){ $("#body").innerHTML='<div class="card">Erro: '+r.error.message+'</div>'; return; }
+      (r.data||[]).forEach(function(row){ P[row.chave]=row.valor; });
+      render();
+    }
+    function g(k,d){ return (P[k]==null?d:P[k]); }
+    function render(){
+      var md=g("meta_diaria",{}), mx=g("mix_fila",{}), pr=g("pesos_ranking",{});
+      $("#body").innerHTML=
+        '<div class="card grp"><h3>Meta de tarefas por dia</h3><div class="d">Quantos contatos por vendedor num dia. Desafio que tem fim — não é corrida.</div><div class="fields">'
+          +num(["m_fra","Francisco"],md.Francisco!=null?md.Francisco:18)+num(["m_mat","Matheus"],md.Matheus!=null?md.Matheus:30)+num(["m_lor","Lorena"],md.Lorena!=null?md.Lorena:30)+'</div></div>'
+        +'<div class="card grp"><h3>Mistura da fila do dia (%)</h3><div class="d">A proporção de cada balde na fila. Soma idealmente 100.</div><div class="fields">'
+          +num(["x_rec","Recompra"],mx.recompra!=null?mx.recompra:40)+num(["x_rea","Reativar"],mx.reativar!=null?mx.reativar:30)+num(["x_lea","Lead novo"],mx.lead!=null?mx.lead:30)+'</div></div>'
+        +'<div class="card grp"><h3>Pesos do ranking</h3><div class="d">O quanto cada quesito puxa a prioridade de quem ligar.</div><div class="fields">'
+          +num(["p_tim","Timing"],pr.timing!=null?pr.timing:40)+num(["p_val","Valor (R$)"],pr.valor!=null?pr.valor:30)+num(["p_cli","Já é cliente"],pr.ja_cliente!=null?pr.ja_cliente:15)+num(["p_reg","Regularidade"],pr.regularidade!=null?pr.regularidade:15)+'</div></div>'
+        +'<div class="card grp"><h3>Recompra e digital</h3><div class="d">Dias-base de recompra sem histórico; e quando soltar um lead pro digital.</div><div class="fields">'
+          +num(["r_dias","Recompra padrão (dias)"],g("recompra_default_dias",60),150)+num(["d_tent","Tentativas p/ digital"],g("digital_tentativas",5),150)+num(["d_dias","Janela digital (dias)"],g("digital_dias",21),150)+'</div></div>'
+        +'<div class="bar"><button class="btn green" onclick="salvar()">Salvar parâmetros</button><span class="ok" id="ok">✓ salvo</span></div>';
+    }
+    window.salvar=async function(){
+      var v=function(id){ return parseFloat($("#"+id).value)||0; };
+      var rows=[
+        {chave:"meta_diaria", valor:{Francisco:v("m_fra"),Matheus:v("m_mat"),Lorena:v("m_lor")}},
+        {chave:"mix_fila", valor:{recompra:v("x_rec"),reativar:v("x_rea"),lead:v("x_lea")}},
+        {chave:"pesos_ranking", valor:{timing:v("p_tim"),valor:v("p_val"),ja_cliente:v("p_cli"),regularidade:v("p_reg")}},
+        {chave:"recompra_default_dias", valor:v("r_dias")},
+        {chave:"digital_tentativas", valor:v("d_tent")},
+        {chave:"digital_dias", valor:v("d_dias")}
+      ];
+      for(var i=0;i<rows.length;i++){
+        var r=await sb.from("va_parametros").update({valor:rows[i].valor, atualizado_em:new Date().toISOString()}).eq("chave",rows[i].chave);
+        if(r.error){ alert("Erro ao salvar "+rows[i].chave+": "+r.error.message); return; }
+      }
+      var o=$("#ok"); o.classList.add("on"); setTimeout(function(){o.classList.remove("on");},1600);
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Listagem · Venda Ativa</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .ctrls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+  .tablewrap{overflow:auto;max-height:72vh;border:1px solid var(--border);border-radius:10px;}
+  .count{font-size:12px;color:var(--muted);margin-bottom:8px;}
+  td.r,th.r{text-align:right;}
+  .stb{font-size:11px;padding:2px 7px;border-radius:999px;}
+  .s-cliente{background:rgba(63,185,80,.15);color:#56d364;}.s-lead{background:rgba(88,166,255,.15);color:#79c0ff;}
+  .s-prospect{background:rgba(210,153,34,.15);color:#e3b341;}.s-outro{background:var(--panel2);color:var(--muted);}
+  select.dono{padding:3px 7px;font-size:12px;border-radius:6px;}
+</style>
+</head>
+<body>
+<div class="va-content">
+  <div class="va-h1">Listagem</div>
+  <div class="va-sub">O banco inteiro de contatos, como uma planilha. Filtre, ordene (clique no cabeçalho) e exporte.</div>
+  <div class="ctrls">
+    <select id="fSeg"><option value="">Todos os segmentos</option><option>Linha Box</option><option>Grampos Industriais</option><option>Pinos</option><option>Pregos</option><option>Alicates</option><option>Diversos</option></select>
+    <select id="fStatus"><option value="">Todas as situações</option><option>cliente</option><option>lead</option><option>prospect</option><option>nao_atendeu</option><option>mala_direta</option><option>encerrado</option></select>
+    <select id="fOrig"><option value="">Todas as origens</option><option value="mercadolivre">Mercado Livre / Segunda Venda</option><option value="bling_b2b">Bling</option><option value="manual">Nova (Neco)</option></select>
+    <select id="fUlt"><option value="">Último contato: tudo</option><option value="1">Sem contato +1 mês</option><option value="3">Sem contato +3 meses</option><option value="6">Sem contato +6 meses</option><option value="12">Sem contato +12 meses</option></select>
+    <select id="fVend"></select>
+    <input id="q" type="text" placeholder="Buscar empresa…" style="width:200px;">
+    <button class="btn" onclick="carregar()">Aplicar</button>
+    <button class="btn green" onclick="exportar()">Exportar CSV</button>
+  </div>
+  <div class="count" id="count"></div>
+  <div class="tablewrap"><table class="tbl" id="tbl"><thead></thead><tbody></tbody></table></div>
+</div>
+<script src="app.js"></script>
+<script>
+var u=VA.montar("listagem.html");
+if(u){
+  var sb=VA.sb, brl=VA.brl, esc=VA.esc;
+  var $=function(s){return document.querySelector(s);};
+  var rows=[], sortKey="total_all", sortDir=-1;
+  var COLS=[
+    ["empresa","Empresa","t"],["segmento_primario","Segmento","t"],["status","Situação","s"],
+    ["origem","Origem","o"],["pool","Lista","t"],["vendedor_dono","Dono","t"],["uf","UF","t"],["municipio","Cidade","t"],
+    ["celular","Celular","t"],["ultima_compra","Últ. compra","t"],["ultimo_contato","Últ. contato","t"],["proxima_data","Próxima","t"],
+    ["total_12m","12 meses","n"],["total_all","Total","n"]
+  ];
+  var fv=$("#fVend");
+  if(u.role==="admin"){ fv.innerHTML='<option value="">Todos os donos</option><option>Francisco</option><option>Matheus</option><option>Lorena</option>'; }
+  else { fv.style.display="none"; }
+
+  window.carregar=async function(){
+    $("#count").textContent="Carregando…";
+    var qy=sb.from("vw_ficha_cliente").select("empresa,segmento_primario,status,origem,pool,vendedor_dono,uf,municipio,celular,email,ultima_compra,ultimo_contato,proxima_data,total_12m,total_all,documento");
+    var seg=$("#fSeg").value, st=$("#fStatus").value, vd=(u.role==="admin"?fv.value:""), q=$("#q").value.trim(), og=$("#fOrig").value, um=$("#fUlt").value;
+    if(seg) qy=qy.eq("segmento_primario",seg);
+    if(st) qy=qy.eq("status",st);
+    if(og) qy=qy.eq("origem",og);
+    if(vd) qy=qy.eq("vendedor_dono",vd);
+    if(um){ var dd=new Date(); dd.setMonth(dd.getMonth()-parseInt(um)); var cut=dd.toISOString().slice(0,10); qy=qy.or("ultimo_contato.is.null,ultimo_contato.lte."+cut); }
+    if(q) qy=qy.ilike("empresa","%"+q+"%");
+    qy=qy.order("total_all",{ascending:false,nullsFirst:false}).limit(1000);
+    var r=await qy;
+    if(r.error){ $("#count").textContent="Erro: "+r.error.message; return; }
+    rows=r.data||[]; sortKey="total_all"; sortDir=-1; render();
+  };
+  function fmt(v,t){ if(t==="n") return brl(v); return v==null||v===""?"—":esc(v); }
+  function stPill(s){ var c=s==="cliente"?"s-cliente":s==="lead"?"s-lead":s==="prospect"?"s-prospect":"s-outro"; return '<span class="stb '+c+'">'+esc(s||"—")+'</span>'; }
+  function origLabel(o){ return o==="mercadolivre"?"Merc. Livre":o==="bling_b2b"?"Bling":o==="manual"?"Nova":"—"; }
+  function render(){
+    rows.sort(function(a,b){ var x=a[sortKey],y=b[sortKey]; if(x==null)return 1; if(y==null)return -1; if(typeof x==="number"||!isNaN(x)&&typeof y!=="string"){} x=(typeof x==="string")?x.toLowerCase():x; y=(typeof y==="string")?y.toLowerCase():y; return (x<y?-1:x>y?1:0)*sortDir; });
+    $("#count").textContent=rows.length+" registros"+(rows.length===1000?" (limite de 1000 — refine o filtro)":"");
+    $("#tbl thead").innerHTML="<tr>"+COLS.map(function(c){ var arrow=(c[0]===sortKey)?(sortDir<0?" ↓":" ↑"):""; return '<th class="'+(c[2]==="n"?"r":"")+'" onclick="ordenar(\''+c[0]+'\')">'+c[1]+arrow+'</th>'; }).join("")+"</tr>";
+    $("#tbl tbody").innerHTML=rows.map(function(row){
+      return "<tr>"+COLS.map(function(c){
+        if(c[0]==="status") return "<td>"+stPill(row[c[0]])+"</td>";
+        if(c[0]==="vendedor_dono"){
+          var dono=row.vendedor_dono||"GGE";
+          var opts=["GGE","Francisco","Matheus","Lorena"].map(function(o){return '<option'+(o===dono?" selected":"")+'>'+o+'</option>';}).join("");
+          return '<td><select class="dono" onchange="mudarDono(\''+row.documento+'\',this.value,this)">'+opts+'</select></td>';
+        }
+        return '<td class="'+(c[2]==="n"?"r":"")+'">'+fmt(row[c[0]],c[2])+"</td>";
+      }).join("")+"</tr>";
+    }).join("");
+  }
+  window.ordenar=function(k){ if(sortKey===k) sortDir=-sortDir; else { sortKey=k; sortDir=1; } render(); };
+  window.exportar=function(){
+    var head=COLS.map(function(c){return c[1];}).join(";");
+    var body=rows.map(function(r){ return COLS.map(function(c){ var v=r[c[0]]; v=(v==null?"":String(v)).replace(/;/g,",").replace(/\n/g," "); return v; }).join(";"); }).join("\n");
+    var blob=new Blob(["﻿"+head+"\n"+body],{type:"text/csv;charset=utf-8;"});
+    var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="venda-ativa-listagem.csv"; a.click();
+  };
+  window.mudarDono=async function(doc,val,el){
+    var v=(val==="GGE")?null:val; el.disabled=true;
+    var r=await sb.from("va_cliente_status").update({vendedor_dono:v,atualizado_em:new Date().toISOString()}).eq("documento",doc);
+    el.disabled=false;
+    if(r.error){ alert("Erro ao mudar o dono: "+r.error.message); return; }
+    for(var i=0;i<rows.length;i++){ if(rows[i].documento===doc){ rows[i].vendedor_dono=v; break; } }
+    el.style.borderColor="#3fb950"; setTimeout(function(){ el.style.borderColor=""; },1200);
+  };
+  $("#q").addEventListener("keydown",function(e){ if(e.key==="Enter")carregar(); });
+  carregar();
+}
+</script>
+</body>
+</html>

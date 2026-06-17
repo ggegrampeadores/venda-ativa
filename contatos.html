@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contatos · Venda Ativa</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .ctrls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
+  .grid{display:grid;grid-template-columns:1.05fr 1fr;gap:16px;align-items:start;}
+  @media(max-width:880px){.grid{grid-template-columns:1fr;}}
+  .row{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:7px;display:flex;align-items:center;gap:10px;cursor:pointer;}
+  .row:hover{border-color:#3d4757;}.row.sel{border-color:var(--blue);}
+  .row .main{flex:1;min-width:0;}
+  .row .nm{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row .meta{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bk{font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+  .bk0{background:rgba(248,81,73,.18);color:#ff7b72;}.bk1{background:rgba(63,185,80,.15);color:#56d364;}
+  .bk2{background:rgba(219,109,75,.18);color:#f0a48a;}.bk3{background:rgba(88,166,255,.15);color:#79c0ff;}
+  .wa{color:var(--green);font-size:15px;}
+  .fhead{display:flex;align-items:center;gap:11px;flex-wrap:wrap;}
+  .avatar{width:40px;height:40px;border-radius:50%;background:rgba(88,166,255,.18);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;}
+  .tag{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--panel2);color:var(--muted);border:1px solid var(--border);}
+  .phones{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin-top:10px;}.phones .pri{color:var(--blue);}.phones .alt{color:var(--muted);}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px;}@media(max-width:520px){.two{grid-template-columns:1fr;}}
+  .sec .t{font-size:12px;color:var(--muted2);margin-bottom:5px;}.sec .c{font-size:13px;line-height:1.7;border-top:1px solid var(--border);padding-top:8px;}
+  .inputs{margin-top:14px;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.3);border-radius:10px;padding:12px 14px;}
+  .inputs .cap{font-size:12px;color:var(--blue);font-weight:600;margin-bottom:10px;}
+  .ig{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}.ig .l{font-size:12px;color:var(--muted);margin-bottom:4px;}
+  .inputs input{width:100%;}
+  .stepper{display:flex;align-items:center;gap:8px;}.stepper button{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:16px;}.stepper .n{font-size:18px;font-weight:600;min-width:16px;text-align:center;}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}.chip{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);}.chip.on{border-color:var(--blue);color:var(--blue);}
+  .fa{margin-top:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}.saved{font-size:12px;color:var(--green);opacity:0;transition:opacity .2s;}.saved.on{opacity:1;}
+  .overlay{position:fixed;inset:0;background:rgba(1,4,9,.7);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:40px 16px;overflow-y:auto;}.overlay.on{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:100%;max-width:640px;}
+  .mhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;border-bottom:1px solid var(--border);}
+  .close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:18px;}
+  .mbody{padding:16px 18px 22px;}.kv{font-size:13px;line-height:1.9;}.kv b{color:var(--muted);font-weight:400;display:inline-block;min-width:140px;}
+  .banner{padding:9px 13px;border-radius:8px;font-size:13px;margin-bottom:12px;}.banner.err{background:rgba(248,81,73,.12);color:#ff7b72;}.banner.ok{background:rgba(63,185,80,.12);color:#56d364;}
+</style>
+</head>
+<body>
+<div class="va-content">
+  <div class="va-h1">Contatos</div>
+  <div class="va-sub" id="sub"></div>
+  <div class="ctrls">
+    <select id="selVend"></select>
+    <select id="selSeg">
+      <option value="">Todos os segmentos</option>
+      <option>Linha Box</option><option>Grampos Industriais</option><option>Pinos</option>
+      <option>Pregos</option><option>Alicates</option><option>Diversos</option>
+    </select>
+    <input id="q" type="text" placeholder="Buscar empresa…" autocomplete="off" style="width:200px;">
+    <button class="btn" onclick="carregar()">Atualizar</button>
+  </div>
+  <div id="banner"></div>
+  <div class="mrow" id="metrics"></div>
+  <div class="grid">
+    <div class="card"><div id="lista"><div class="empty">—</div></div></div>
+    <div class="card"><div id="fichaVazia" class="empty">Selecione um contato na fila.</div><div id="ficha" style="display:none;"></div></div>
+  </div>
+</div>
+<div class="overlay" id="overlay" onclick="if(event.target===this)fecharModal()">
+  <div class="modal"><div class="mhead"><div style="font-size:16px;font-weight:600;" id="mTitle">Detalhes</div>
+    <button class="close" onclick="fecharModal()">×</button></div><div class="mbody" id="mBody"></div></div>
+</div>
+
+<script src="app.js"></script>
+<script>
+var u = VA.montar("contatos.html");
+if(u){
+  var sb=VA.sb, brl=VA.brl, waNum=VA.waNum, esc=VA.esc;
+  var BK={0:["Compromisso","bk0"],1:["Recompra","bk1"],2:["Reativar","bk2"],3:["Lead novo","bk3"]};
+  var fila=[], sel=null, currentFicha=null;
+  var $=function(s){return document.querySelector(s);};
+  function banner(m,t){ $("#banner").innerHTML = m?'<div class="banner '+t+'">'+m+'</div>':""; }
+
+  // seletor de vendedor: vendedor ve so a propria fila; admin escolhe.
+  var selV=$("#selVend");
+  if(u.role==="admin"){ selV.innerHTML='<option value="">Todos</option><option>Francisco</option><option>Matheus</option><option>Lorena</option>'; }
+  else { selV.innerHTML='<option>'+esc(u.nome)+'</option>'; selV.value=u.nome; selV.disabled=true; }
+
+  window.carregar=async function(){
+    banner(""); $("#lista").innerHTML='<div class="empty">Carregando…</div>';
+    var v=selV.value, seg=$("#selSeg").value;
+    var qy=sb.from("vw_fila").select("*").lt("bucket",9);
+    if(v) qy=qy.eq("vendedor_alvo",v);
+    if(seg) qy=qy.eq("segmento_primario",seg);
+    qy=qy.order("bucket",{ascending:true}).order("valor_ref",{ascending:false,nullsFirst:false}).limit(40);
+    var r=await qy;
+    if(r.error){ banner("Erro: "+r.error.message,"err"); $("#lista").innerHTML='<div class="empty">—</div>'; return; }
+    fila=r.data||[]; renderLista(); renderMetrics();
+    $("#sub").textContent=new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})+(v?" · "+v:"");
+  };
+  function renderMetrics(){
+    var c=function(b){return fila.filter(function(f){return f.bucket===b;}).length;};
+    $("#metrics").innerHTML=
+      '<div class="metric"><div class="lbl">Na fila</div><div class="val">'+fila.length+'</div></div>'
+      +'<div class="metric"><div class="lbl">Compromissos</div><div class="val" style="color:var(--red)">'+c(0)+'</div></div>'
+      +'<div class="metric"><div class="lbl">Recompra na hora</div><div class="val" style="color:var(--green)">'+c(1)+'</div></div>'
+      +'<div class="metric"><div class="lbl">Reativar / Leads</div><div class="val">'+c(2)+' / '+c(3)+'</div></div>';
+  }
+  function renderLista(){
+    if(!fila.length){ $("#lista").innerHTML='<div class="empty">Nada na fila para este filtro.</div>'; return; }
+    $("#lista").innerHTML=fila.map(function(f){
+      var b=BK[f.bucket]||["",""]; var w=waNum(f.celular);
+      return '<div class="row '+(sel===f.documento?"sel":"")+'" onclick="abrirFicha(\''+f.documento+'\')">'
+        +'<div class="main"><div class="nm">'+esc(f.empresa||f.documento)+'</div>'
+        +'<div class="meta">'+esc(f.segmento_primario||"—")+' · '+esc(f.municipio||"")+(f.uf?"/"+f.uf:"")+' · '+brl(f.valor_ref)+'</div></div>'
+        +'<span class="bk '+b[1]+'">'+b[0]+'</span>'
+        +'<span>'+(w?'<a class="wa" href="https://wa.me/'+w+'" target="_blank" onclick="event.stopPropagation()">✦</a>':"")+'</span></div>';
+    }).join("");
+  }
+  window.abrirFicha=async function(doc){
+    sel=doc; renderLista(); $("#fichaVazia").style.display="none"; $("#ficha").style.display="block";
+    $("#ficha").innerHTML='<div class="empty">Carregando…</div>';
+    var r=await sb.from("vw_ficha_cliente").select("*").eq("documento",doc).limit(1);
+    if(r.error||!r.data||!r.data.length){ $("#ficha").innerHTML='<div class="empty">Não foi possível abrir.</div>'; return; }
+    var f=r.data[0]; currentFicha=f;
+    var ini=(f.empresa||"?").trim().slice(0,2).toUpperCase(); var tent=f.tentativas||0;
+    var st=["lead","prospect","cliente","nao_atendeu","mala_direta","encerrado"];
+    $("#ficha").innerHTML=
+      '<div class="fhead"><div class="avatar">'+esc(ini)+'</div><div style="flex:1;min-width:0;"><div class="nm" style="font-size:16px;font-weight:600;">'+esc(f.empresa||f.nome||f.documento)+'</div>'
+      +'<div style="font-size:12px;color:var(--muted);">'+(f.pessoa_contato?esc(f.pessoa_contato)+" · ":"")+esc(f.municipio||"")+(f.uf?"/"+f.uf:"")+'</div></div>'
+      +'<span class="tag">'+esc(f.status||"")+'</span><span class="tag">'+esc(f.segmento_primario||"")+'</span></div>'
+      +'<div class="phones">'+(f.celular?'<a class="pri" href="https://wa.me/'+waNum(f.celular)+'" target="_blank">✆ '+esc(f.celular)+'</a>':'<span class="alt">sem celular</span>')
+      +(f.telefone?'<span class="alt">tel: '+esc(f.telefone)+'</span>':"")+(f.email?'<span class="alt">'+esc(f.email)+'</span>':"")+'</div>'
+      +'<div class="two"><div class="sec"><div class="t">Compras</div><div class="c">Última: '+esc(f.ultima_compra||"—")+'<br>12 meses: '+brl(f.total_12m)+'<br>Total: '+brl(f.total_all)+'<br>Pedidos: '+(f.n_pedidos||"—")+'</div></div>'
+      +'<div class="sec"><div class="t">Top produtos</div><div class="c">'+esc(f.top_prod5||f.razao_social||"—")+'</div></div></div>'
+      +'<div class="inputs"><div class="cap">Só isto você registra</div><div class="ig">'
+      +'<div><div class="l">Tentativas até falar</div><div class="stepper"><button onclick="bump(-1)">−</button><span class="n" id="att">'+tent+'</span><button onclick="bump(1)">+</button></div></div>'
+      +'<div><div class="l">Próxima ligação (vira compromisso)</div><input id="prox" type="date" value="'+(f.proxima_data||"")+'"></div>'
+      +'<div><div class="l">Lembrete</div><input id="lemb" type="text" placeholder="ex.: pediu cotação" value="'+esc(f.lembrete||"")+'"></div></div></div>'
+      +'<div style="margin-top:13px;border-top:1px solid var(--border);padding-top:10px;"><div style="font-size:12px;color:var(--muted2);">Situação</div><div class="chips">'
+      +st.map(function(s){return '<button class="chip '+(f.status===s?"on":"")+'" onclick="setStatus(this,\''+s+'\')">'+s+'</button>';}).join("")+'</div></div>'
+      +'<div class="fa"><button class="btn blue" onclick="verDetalhes()">Ver tudo</button><button class="btn green" onclick="salvar(\''+doc+'\')">Salvar registro</button><span class="saved" id="savedMsg">✓ salvo</span></div>';
+    $("#ficha").dataset.status=f.status||"";
+  };
+  window.bump=function(n){ var e=$("#att"); e.textContent=Math.max(0,(parseInt(e.textContent)||0)+n); };
+  window.setStatus=function(btn,s){ document.querySelectorAll(".chip").forEach(function(c){c.classList.remove("on");}); btn.classList.add("on"); $("#ficha").dataset.status=s; };
+  window.salvar=async function(doc){
+    var tent=parseInt($("#att").textContent)||0, prox=$("#prox").value||null, lemb=$("#lemb").value||null, status=$("#ficha").dataset.status||null;
+    var upd={tentativas:tent,lembrete:lemb,proxima_data:prox,status:status,atualizado_em:new Date().toISOString()};
+    if(prox) upd.compromisso=true;
+    var r=await sb.from("va_cliente_status").update(upd).eq("documento",doc);
+    if(r.error){ banner("Erro ao salvar: "+r.error.message,"err"); return; }
+    await sb.from("va_interacoes").insert({documento:doc,vendedor:(u.role==="admin"?selV.value:u.nome),resultado:status,tentativas_no_contato:tent,nota:lemb});
+    var m=$("#savedMsg"); m.classList.add("on"); setTimeout(function(){m.classList.remove("on");},1500);
+    banner("Registro salvo.","ok"); setTimeout(function(){banner("");},1600);
+  };
+  window.verDetalhes=function(){
+    var f=currentFicha; if(!f) return;
+    $("#mTitle").textContent=f.empresa||f.nome||f.documento;
+    $("#mBody").innerHTML='<div class="kv">'
+      +'<b>Documento</b> '+esc(f.documento)+' ('+esc(f.tipo_doc||"")+')<br><b>Origem</b> '+esc(f.origem||"—")+' · pool '+esc(f.pool||"—")+'<br>'
+      +'<b>Dono</b> '+esc(f.vendedor_dono||"(não atribuído)")+'<br><b>Segmento</b> '+esc(f.segmento_primario||"—")+'<br>'
+      +'<b>Contato</b> '+esc(f.pessoa_contato||"—")+'<br><b>Celular</b> '+esc(f.celular||"—")+' &nbsp; <b>Tel</b> '+esc(f.telefone||"—")+'<br>'
+      +'<b>E-mail</b> '+esc(f.email||"—")+'<br><b>Cidade/UF</b> '+esc(f.municipio||"—")+(f.uf?"/"+f.uf:"")+'<br>'
+      +'<b>Última compra</b> '+esc(f.ultima_compra||"—")+'<br><b>Próxima (sugerida)</b> '+esc(f.proxima_data||"—")+'<br>'
+      +'<b>Compras 3/6/12m</b> '+brl(f.total_3m)+' / '+brl(f.total_6m)+' / '+brl(f.total_12m)+'<br>'
+      +'<b>Total histórico</b> '+brl(f.total_all)+' · '+(f.n_pedidos||"—")+' pedidos<br><b>Top produtos</b> '+esc(f.top_prod5||"—")+'<br>'
+      +'<b>Razão social</b> '+esc(f.razao_social||"—")+'<br><b>Atividade (CNAE)</b> '+esc(f.atividade_principal||"—")+'<br>'
+      +'<b>Porte</b> '+esc(f.porte||"—")+(f.num_empregados?" · "+f.num_empregados+" func.":"")+'<br><b>Site</b> '+esc(f.url_empresa||"—")+'</div>';
+    $("#overlay").classList.add("on");
+  };
+  window.fecharModal=function(){ $("#overlay").classList.remove("on"); };
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape")fecharModal(); });
+  var qtmr=null;
+  $("#q").addEventListener("input",function(){
+    clearTimeout(qtmr); var v=this.value.trim(); if(v.length<2) return;
+    qtmr=setTimeout(async function(){
+      var r=await sb.from("vw_ficha_cliente").select("documento,empresa,segmento_primario,municipio,uf,celular,total_all").ilike("empresa","%"+v+"%").limit(25);
+      if(r.error) return;
+      fila=(r.data||[]).map(function(d){ d.bucket=9; d.valor_ref=d.total_all; return d; });
+      $("#sub").textContent='Busca: "'+v+'"'; renderLista();
+    },350);
+  });
+  $("#selSeg").addEventListener("change",carregar);
+  if(u.role==="admin") selV.addEventListener("change",carregar);
+  carregar();
+}
+</script>
+</body>
+</html>

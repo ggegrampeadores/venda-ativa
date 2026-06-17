@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protótipo — Tela do Vendedor · CRM Venda Direta GGE</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
+    --text:#e6edf3; --muted:#8b949e; --muted2:#6e7681;
+    --blue:#58a6ff; --green:#3fb950; --red:#f85149; --yellow:#d29922; --coral:#db6d4b;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);line-height:1.5;}
+  .wrap{max-width:1140px;margin:0 auto;padding:20px 24px 60px;}
+  a{color:inherit;}
+  button{font-family:inherit;cursor:pointer;}
+
+  .top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px;}
+  .top h1{font-size:20px;font-weight:600;}
+  .top .sub{font-size:13px;color:var(--muted);margin-top:2px;}
+  .demo-tag{font-size:11px;color:var(--yellow);border:1px solid var(--yellow);border-radius:6px;padding:2px 8px;}
+  .search{position:relative;margin-top:4px;}
+  .search input{width:260px;max-width:60vw;background:var(--panel);border:1px solid var(--border);border-radius:8px;
+    color:var(--text);padding:8px 10px 8px 32px;font-size:13px;}
+  .search input::placeholder{color:var(--muted2);}
+  .search .ic{position:absolute;left:10px;top:8px;color:var(--muted);font-size:14px;}
+  .search-res{position:absolute;top:38px;left:0;width:260px;max-width:60vw;background:var(--panel2);border:1px solid var(--border);
+    border-radius:8px;overflow:hidden;z-index:20;display:none;}
+  .search-res div{padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border);}
+  .search-res div:last-child{border-bottom:none;}
+  .search-res div:hover{background:var(--panel);}
+
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0 20px;}
+  .metric{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+  .metric .lbl{font-size:12px;color:var(--muted);}
+  .metric .val{font-size:22px;font-weight:600;margin-top:4px;}
+  .metric .val small{font-size:13px;font-weight:400;color:var(--muted);}
+
+  .grid{display:grid;grid-template-columns:1.05fr 1fr;gap:18px;align-items:start;}
+  @media(max-width:860px){.grid{grid-template-columns:1fr;}}
+
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
+  .tabs{display:flex;gap:6px;margin-bottom:12px;}
+  .tab{font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);}
+  .tab.on{background:var(--panel2);color:var(--text);border-color:#3d4757;}
+  .hint{font-size:12px;color:var(--muted);margin-bottom:10px;}
+
+  .row{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;
+    display:flex;align-items:center;gap:10px;cursor:pointer;transition:border-color .12s;}
+  .row:hover{border-color:#3d4757;}
+  .row.sel{border-color:var(--blue);}
+  .row .main{flex:1;min-width:0;}
+  .row .nm{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .row .meta{font-size:12px;color:var(--muted);margin-top:3px;}
+  .badge{font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+  .b-cli{background:rgba(63,185,80,.15);color:#56d364;}
+  .b-pro{background:rgba(210,153,34,.15);color:#e3b341;}
+  .b-lead{background:rgba(88,166,255,.15);color:#79c0ff;}
+  .reason{font-size:12px;padding:3px 9px;border-radius:999px;white-space:nowrap;}
+  .r-hoje{background:rgba(63,185,80,.15);color:#56d364;}
+  .r-atras{background:rgba(248,81,73,.15);color:#ff7b72;}
+  .r-reat{background:rgba(219,109,75,.18);color:#f0a48a;}
+  .r-prop{background:rgba(210,153,34,.15);color:#e3b341;}
+  .r-novo{background:rgba(88,166,255,.15);color:#79c0ff;}
+  .acts{display:flex;gap:8px;font-size:16px;}
+  .acts .ph{color:var(--blue);} .acts .wa{color:var(--green);}
+
+  /* ficha */
+  .fichaEmpty{color:var(--muted);font-size:14px;text-align:center;padding:40px 10px;}
+  .fhead{display:flex;align-items:center;gap:11px;flex-wrap:wrap;}
+  .avatar{width:40px;height:40px;border-radius:50%;background:rgba(88,166,255,.18);color:var(--blue);
+    display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;}
+  .fhead .nm{font-size:16px;font-weight:600;}
+  .fhead .who{font-size:12px;color:var(--muted);margin-top:1px;}
+  .tag-soft{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--panel2);color:var(--muted);border:1px solid var(--border);}
+  .phones{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin-top:10px;}
+  .phones .pri{color:var(--blue);} .phones .alt{color:var(--muted);}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;}
+  @media(max-width:520px){.two{grid-template-columns:1fr;}}
+  .sec .t{font-size:12px;color:var(--muted2);margin-bottom:5px;}
+  .sec .c{font-size:13px;line-height:1.7;border-top:1px solid var(--border);padding-top:8px;}
+
+  .inputs{margin-top:14px;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.3);border-radius:10px;padding:12px 14px;}
+  .inputs .cap{font-size:12px;color:var(--blue);font-weight:600;margin-bottom:10px;}
+  .ig{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+  .ig .l{font-size:12px;color:var(--muted);margin-bottom:4px;}
+  .stepper{display:flex;align-items:center;gap:8px;}
+  .stepper button{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:16px;}
+  .stepper .n{font-size:18px;font-weight:600;min-width:16px;text-align:center;}
+  .inputs input{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:7px 9px;font-size:13px;}
+
+  .promo{margin-top:12px;display:flex;align-items:center;gap:8px;font-size:13px;background:var(--panel2);border-radius:8px;padding:8px 12px;}
+  .promo b{font-weight:600;color:var(--yellow);}
+
+  .status-row{margin-top:14px;border-top:1px solid var(--border);padding-top:10px;}
+  .status-row .t{font-size:12px;color:var(--muted2);margin-bottom:8px;}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;}
+  .chip{font-size:12px;padding:4px 11px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);}
+  .chip.on{border-color:var(--blue);color:var(--blue);}
+
+  .ficha-actions{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;}
+  .btn{font-size:13px;padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);}
+  .btn.primary{border-color:var(--blue);color:var(--blue);}
+  .btn.save{border-color:var(--green);color:var(--green);}
+
+  .saved{font-size:12px;color:var(--green);margin-left:6px;opacity:0;transition:opacity .2s;}
+  .saved.on{opacity:1;}
+
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(1,4,9,.7);display:none;align-items:flex-start;justify-content:center;
+    z-index:50;padding:40px 16px;overflow-y:auto;}
+  .overlay.on{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:100%;max-width:680px;}
+  .mhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border);
+    position:sticky;top:0;background:var(--panel);border-radius:14px 14px 0 0;}
+  .mhead .nm{font-size:16px;font-weight:600;}
+  .close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:18px;line-height:1;}
+  .close:hover{border-color:var(--red);color:var(--red);}
+  .mbody{padding:16px 18px 22px;}
+  .mblock{margin-bottom:18px;}
+  .mblock h4{font-size:13px;color:var(--blue);font-weight:600;margin-bottom:8px;}
+  table.det{width:100%;border-collapse:collapse;font-size:13px;}
+  table.det th{text-align:left;color:var(--muted);font-weight:400;font-size:12px;padding:5px 8px;border-bottom:1px solid var(--border);}
+  table.det td{padding:6px 8px;border-bottom:1px solid var(--border);}
+  table.det td.r{text-align:right;}
+  .kv{font-size:13px;line-height:1.9;}
+  .kv b{color:var(--muted);font-weight:400;display:inline-block;min-width:150px;}
+  .note-hist{font-size:13px;line-height:1.7;color:var(--text);}
+  .note-hist .d{color:var(--muted);}
+  .footnote{margin-top:26px;font-size:12px;color:var(--muted2);text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div>
+      <h1>Tela do vendedor <span class="demo-tag">protótipo · dados de exemplo</span></h1>
+      <div class="sub">Matheus · segunda, 16 de junho</div>
+    </div>
+    <div class="search">
+      <span class="ic">⌕</span>
+      <input id="q" type="text" placeholder="Buscar cliente pelo nome…" autocomplete="off">
+      <div class="search-res" id="qres"></div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric"><div class="lbl">Tarefas do dia</div><div class="val">12 <small>/ 18</small></div></div>
+    <div class="metric"><div class="lbl">Esforço · tentativas / contatos</div><div class="val">47 <small>· 23 contatos</small></div></div>
+    <div class="metric"><div class="lbl">Vendas no mês</div><div class="val">R$ 38,2<small> mil</small></div></div>
+    <div class="metric"><div class="lbl">Margem conquistada</div><div class="val" style="color:var(--green)">+R$ 2,1<small> mil</small></div></div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT: lista -->
+    <div class="panel">
+      <div class="tabs">
+        <button class="tab on" id="tabFila" onclick="setTab('fila')">Fila do dia</button>
+        <button class="tab" id="tabFeitos" onclick="setTab('feitos')">Trabalhados hoje</button>
+      </div>
+      <div class="hint" id="listHint">A mistura já vem pronta: clientes para recomprar, prospects e leads novos.</div>
+      <div id="list"></div>
+    </div>
+
+    <!-- RIGHT: ficha -->
+    <div class="panel" id="fichaPanel">
+      <div class="fichaEmpty" id="fichaEmpty">Selecione um cliente na fila para abrir a ficha.</div>
+      <div id="ficha" style="display:none;"></div>
+    </div>
+  </div>
+
+  <div class="footnote">Protótipo navegável apenas para discussão — os dados são fictícios e nada é salvo de verdade.</div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Detalhes do cliente">
+    <div class="mhead">
+      <div class="nm" id="mTitle">Detalhes</div>
+      <button class="close" aria-label="Fechar" onclick="closeModal()">×</button>
+    </div>
+    <div class="mbody" id="mBody"></div>
+  </div>
+</div>
+
+<script>
+const DATA = [
+  {
+    id:"horizonte", nm:"Marcenaria Horizonte", status:"cli", origem:"veio do Mercado Livre",
+    who:"Sr. Anderson (decide a compra)", city:"Duque de Caxias / RJ", init:"MH",
+    phone:"(21) 99888-1020", alt:["site (21) 3771-4400","NF (21) 99550-2231"],
+    reason:"Recompra prevista hoje", rcls:"r-hoje",
+    last:"grampo 80/12 · R$ 3.100 · há 41 dias",
+    compra:"Grampo 80/12 — R$ 3.100\nPino F25 — R$ 740\nFrete CIF · prazo 14 dias",
+    hist:"Última: há 41 dias\nCompra a cada ~40 dias\n12 compras em 12 meses",
+    next:"28 jul (sugerido)", attempts:2, reminder:"",
+    produtos:[["Grampo 80/12","18 cx / mês","R$ 3.100","há 41 dias"],["Pino F25","4 cx / mês","R$ 740","há 41 dias"],["Grampo 90/15","esporádico","R$ 410","há 5 meses"]],
+    compras:[["16/mai","Grampo 80/12 (18) + Pino F25 (4)","R$ 3.840"],["04/abr","Grampo 80/12 (16)","R$ 2.760"],["28/fev","Grampo 80/12 (18) + Grampo 90/15","R$ 3.510"]],
+    frota:"4 grampeadores pneumáticos (2 em uso intenso). Última manutenção há 7 meses — vale oferecer revisão.",
+    pneu:"Compressor próprio, rede antiga. Possível upgrade de mangueira.",
+    obs:[["12/mai","Pediu para sempre faturar com 14 dias."],["04/abr","Reclamou de atraso na transportadora — resolver na próxima."]]
+  },
+  {
+    id:"lima", nm:"Estofados Lima & Cia", status:"cli", origem:"cliente antigo (Bling)",
+    who:"Dona Cláudia (compras)", city:"São Gonçalo / RJ", init:"EL",
+    phone:"(21) 99771-3380", alt:["site (21) 2605-1190"],
+    reason:"Atrasado 6 dias", rcls:"r-atras",
+    last:"pino F32 · R$ 1.870 · há 58 dias",
+    compra:"Pino F32 — R$ 1.870\nGrampo 106/22 — R$ 980\nFrete FOB · prazo 21 dias",
+    hist:"Última: há 58 dias\nCompra a cada ~52 dias\n9 compras em 12 meses",
+    next:"hoje (atrasado)", attempts:1, reminder:"",
+    produtos:[["Pino F32","10 cx / ciclo","R$ 1.870","há 58 dias"],["Grampo 106/22","6 cx / ciclo","R$ 980","há 58 dias"]],
+    compras:[["19/abr","Pino F32 (10) + Grampo 106/22 (6)","R$ 2.850"],["24/fev","Pino F32 (10)","R$ 1.870"]],
+    frota:"2 grampeadores. Sem registro de assistência — perguntar.",
+    pneu:"Não mapeado.",
+    obs:[["19/abr","Sensível a preço de frete — preferiu FOB."]]
+  },
+  {
+    id:"aurora", nm:"Móveis Aurora", status:"cli", origem:"veio do Mercado Livre",
+    who:"Sr. Paulo", city:"Niterói / RJ", init:"MA",
+    phone:"(21) 99440-7711", alt:["site (21) 2710-3322"],
+    reason:"Reativar", rcls:"r-reat",
+    last:"comprava todo mês · parou há 4 meses",
+    compra:"Grampo 80/10 — R$ 1.450\nFrete CIF · prazo 7 dias",
+    hist:"Última: há 4 meses\nComprava a cada ~30 dias\nParou de comprar",
+    next:"hoje (reativação)", attempts:0, reminder:"",
+    produtos:[["Grampo 80/10","mensal","R$ 1.450","há 4 meses"]],
+    compras:[["10/fev","Grampo 80/10 (9)","R$ 1.450"],["12/jan","Grampo 80/10 (9)","R$ 1.450"]],
+    frota:"3 grampeadores. Parou de comprar sem motivo registrado — boa chance com o preço novo.",
+    pneu:"Não mapeado.",
+    obs:[["—","Cliente sumiu antes da virada de preço de janeiro. Vale retomar com oferta nova."]]
+  },
+  {
+    id:"paletes", nm:"Fábrica de Paletes Sul", status:"pro", origem:"prospect (Google)",
+    who:"Sr. Edson (sócio)", city:"Campo Grande / RJ", init:"PS",
+    phone:"(21) 98123-4567", alt:["site (21) 3409-8800"],
+    reason:"Retornar proposta", rcls:"r-prop",
+    last:"proposta enviada há 9 dias",
+    compra:"Em proposta: Grampo 100/45 + Prego anelado\n(ainda não comprou)",
+    hist:"Sem histórico de compra\nProposta enviada há 9 dias",
+    next:"amanhã (cobrar proposta)", attempts:3, reminder:"",
+    produtos:[["Grampo 100/45","alto volume (estimado)","cotado","—"],["Prego anelado","alto volume (estimado)","cotado","—"]],
+    compras:[],
+    frota:"Linha de produção grande — alto potencial. Confirmar volume mensal.",
+    pneu:"Estrutura pneumática robusta (informação a confirmar).",
+    obs:[["07/jun","Achou o preço competitivo. Vai decidir com o sócio."]]
+  },
+  {
+    id:"madeplac", nm:"Indústria Madeplac", status:"lead", origem:"comprou no Mercado Livre",
+    who:"contato a confirmar", city:"Cabo Frio / RJ", init:"IM",
+    phone:"(22) 99701-5566", alt:[],
+    reason:"Lead novo", rcls:"r-novo",
+    last:"comprou 3× no Mercado Livre · bom volume",
+    compra:"Comprou no ML: Grampo 90/15, Pino F32\n(potencial B2B)",
+    hist:"3 compras no ML nos últimos 6 meses\nNunca comprou no B2B",
+    next:"definir no 1º contato", attempts:0, reminder:"",
+    produtos:[["Grampo 90/15","3× no ML","R$ 380–520","últ. há 1 mês"],["Pino F32","2× no ML","R$ 290","últ. há 2 meses"]],
+    compras:[["ML","compras avulsas no marketplace","R$ ~1.200 total"]],
+    frota:"Desconhecida — levantar no primeiro contato.",
+    pneu:"Desconhecida.",
+    obs:[]
+  }
+];
+
+let state = {}; // id -> {attempts, reminder, status, worked, workedAt}
+DATA.forEach(d=>state[d.id]={attempts:d.attempts, reminder:d.reminder, status:d.status, worked:false, workedAt:null});
+// pré-popular um trabalhado hoje, para demonstrar a aba
+state["paletes"].worked=true; state["paletes"].workedAt="09:24";
+
+let tab="fila";
+let selId=null;
+
+const $=s=>document.querySelector(s);
+function statusBadge(s){return s==="cli"?'<span class="badge b-cli">Cliente</span>':s==="pro"?'<span class="badge b-pro">Prospect</span>':'<span class="badge b-lead">Lead</span>';}
+
+function renderList(){
+  const list=$("#list");
+  let items;
+  if(tab==="fila"){ items=DATA; $("#listHint").textContent="A mistura já vem pronta: clientes para recomprar, prospects e leads novos."; }
+  else { items=DATA.filter(d=>state[d.id].worked); $("#listHint").textContent="Fichas que você já mexeu hoje — reabra para anotar ou atualizar."; }
+  if(items.length===0){ list.innerHTML='<div class="fichaEmpty">Nada por aqui ainda.</div>'; return; }
+  list.innerHTML=items.map(d=>{
+    const st=state[d.id];
+    const when = tab==="feitos" && st.workedAt ? ' · '+st.workedAt : '';
+    return `<div class="row ${selId===d.id?'sel':''}" onclick="openFicha('${d.id}')">
+      <div class="main">
+        <div class="nm">${d.nm} ${statusBadge(st.status)}</div>
+        <div class="meta">${d.city} · ${d.last}${when}</div>
+      </div>
+      <span class="reason ${d.rcls}">${d.reason}</span>
+      <span class="acts"><span class="ph" title="ligar">✆</span><span class="wa" title="whatsapp">✦</span></span>
+    </div>`;
+  }).join("");
+}
+
+function openFicha(id){
+  selId=id; const d=DATA.find(x=>x.id===id); const st=state[id];
+  $("#fichaEmpty").style.display="none";
+  const f=$("#ficha"); f.style.display="block";
+  f.innerHTML=`
+    <div class="fhead">
+      <div class="avatar">${d.init}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="nm">${d.nm}</div>
+        <div class="who">${d.who} · ${d.city}</div>
+      </div>
+      ${statusBadge(st.status)}
+      <span class="tag-soft">${d.origem}</span>
+    </div>
+    <div class="phones">
+      <span class="pri">✆ ${d.phone}</span>
+      ${d.alt.length?`<span class="alt">outros: ${d.alt.join(" · ")}</span>`:`<span class="alt">sem telefone alternativo — buscar no site</span>`}
+    </div>
+    <div class="two">
+      <div class="sec"><div class="t">O que compra</div><div class="c">${d.compra.replace(/\n/g,"<br>")}</div></div>
+      <div class="sec"><div class="t">Histórico</div><div class="c">${d.hist.replace(/\n/g,"<br>")}</div></div>
+    </div>
+
+    <div class="inputs">
+      <div class="cap">Só isto você registra</div>
+      <div class="ig">
+        <div>
+          <div class="l">Tentativas até falar</div>
+          <div class="stepper">
+            <button onclick="bump('${id}',-1)">−</button>
+            <span class="n" id="att">${st.attempts}</span>
+            <button onclick="bump('${id}',1)">+</button>
+          </div>
+        </div>
+        <div>
+          <div class="l">Próxima ligação</div>
+          <input id="nextc" type="text" value="${d.next}">
+        </div>
+        <div>
+          <div class="l">Lembrete</div>
+          <input id="rem" type="text" placeholder="ex.: pediu cotação de pino F32" value="${st.reminder}">
+        </div>
+      </div>
+    </div>
+
+    <div class="promo"><span>💡</span><span><b>Promoção do mês:</b> grampo 90/15 com 8% para pedidos acima de R$ 2.000.</span></div>
+
+    <div class="status-row">
+      <div class="t">Mudar situação</div>
+      <div class="chips">
+        <button class="chip" onclick="setStatus('${id}','enc')">Encerrado</button>
+        <button class="chip" onclick="setStatus('${id}','nat')">Não atendeu</button>
+        <button class="chip" onclick="setStatus('${id}','mala')">Mala direta</button>
+        <button class="chip ${st.status==='pro'?'on':''}" onclick="setStatus('${id}','pro')">Prospect</button>
+        <button class="chip ${st.status==='cli'?'on':''}" onclick="setStatus('${id}','cli')">Cliente</button>
+      </div>
+    </div>
+
+    <div class="ficha-actions">
+      <button class="btn primary" onclick="openModal('${id}')">Ver tudo sobre este cliente</button>
+      <button class="btn save" onclick="saveFicha('${id}')">Salvar registro</button>
+      <span class="saved" id="savedMsg">✓ salvo (exemplo)</span>
+    </div>
+  `;
+  renderList();
+}
+
+function bump(id,n){ const st=state[id]; st.attempts=Math.max(0,st.attempts+n); const e=$("#att"); if(e)e.textContent=st.attempts; markWorked(id); }
+function setStatus(id,s){ state[id].status=s; openFicha(id); markWorked(id); }
+function saveFicha(id){
+  const st=state[id];
+  const r=$("#rem"); if(r)st.reminder=r.value;
+  markWorked(id);
+  const m=$("#savedMsg"); if(m){m.classList.add("on"); setTimeout(()=>m.classList.remove("on"),1600);}
+}
+function markWorked(id){
+  const st=state[id];
+  if(!st.worked){ st.worked=true; const d=new Date(); st.workedAt=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+  renderList();
+}
+
+function setTab(t){ tab=t; $("#tabFila").classList.toggle("on",t==="fila"); $("#tabFeitos").classList.toggle("on",t==="feitos"); renderList(); }
+
+function openModal(id){
+  const d=DATA.find(x=>x.id===id);
+  $("#mTitle").textContent=d.nm;
+  const prod=d.produtos.length?`<table class="det"><tr><th>Produto</th><th>Quantidade</th><th class="r">Último preço</th><th class="r">Última compra</th></tr>${d.produtos.map(p=>`<tr><td>${p[0]}</td><td>${p[1]}</td><td class="r">${p[2]}</td><td class="r">${p[3]}</td></tr>`).join("")}</table>`:'<div class="kv">Sem produtos registrados.</div>';
+  const comp=d.compras.length?`<table class="det"><tr><th>Data</th><th>Itens</th><th class="r">Valor</th></tr>${d.compras.map(c=>`<tr><td>${c[0]}</td><td>${c[1]}</td><td class="r">${c[2]}</td></tr>`).join("")}</table>`:'<div class="kv">Sem compras registradas.</div>';
+  const obs=d.obs.length?d.obs.map(o=>`<div class="note-hist"><span class="d">${o[0]}:</span> ${o[1]}</div>`).join(""):'<div class="kv">Sem observações.</div>';
+  $("#mBody").innerHTML=`
+    <div class="mblock"><h4>Quem decide / contato</h4><div class="kv"><b>Decisor</b> ${d.who}<br><b>Telefone</b> ${d.phone}<br><b>Outros</b> ${d.alt.length?d.alt.join(" · "):"—"}<br><b>Origem</b> ${d.origem}</div></div>
+    <div class="mblock"><h4>Produtos e quantidades</h4>${prod}</div>
+    <div class="mblock"><h4>Histórico de compras</h4>${comp}</div>
+    <div class="mblock"><h4>Frota e assistência técnica</h4><div class="kv">${d.frota}</div></div>
+    <div class="mblock"><h4>Estrutura pneumática</h4><div class="kv">${d.pneu}</div></div>
+    <div class="mblock"><h4>Observações anteriores</h4>${obs}</div>
+  `;
+  $("#overlay").classList.add("on");
+}
+function closeModal(){ $("#overlay").classList.remove("on"); }
+document.addEventListener("keydown",e=>{ if(e.key==="Escape")closeModal(); });
+
+// busca
+const q=$("#q"), qres=$("#qres");
+q.addEventListener("input",()=>{
+  const v=q.value.trim().toLowerCase();
+  if(!v){ qres.style.display="none"; return; }
+  const hits=DATA.filter(d=>d.nm.toLowerCase().includes(v));
+  if(!hits.length){ qres.style.display="none"; return; }
+  qres.innerHTML=hits.map(d=>`<div onclick="pick('${d.id}')">${d.nm} <span style="color:var(--muted);font-size:12px;">· ${d.city}</span></div>`).join("");
+  qres.style.display="block";
+});
+function pick(id){ qres.style.display="none"; q.value=""; openFicha(id); $("#fichaPanel").scrollIntoView({behavior:"smooth",block:"nearest"}); }
+document.addEventListener("click",e=>{ if(!e.target.closest(".search"))qres.style.display="none"; });
+
+renderList();
+</script>
+</body>
+</html>

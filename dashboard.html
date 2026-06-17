@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meu painel · Venda Ativa</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .bars{display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+  .bar{display:grid;grid-template-columns:130px 1fr 48px;align-items:center;gap:10px;font-size:13px;}
+  .track{height:9px;background:var(--panel2);border-radius:6px;overflow:hidden;}
+  .fillb{height:100%;background:var(--blue);border-radius:6px;}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;}@media(max-width:760px){.cols{grid-template-columns:1fr;}}
+  .meta-big .val{font-size:30px;}
+  .prog{height:10px;background:var(--panel2);border-radius:6px;overflow:hidden;margin-top:8px;}
+  .prog > div{height:100%;background:var(--green);}
+</style>
+</head>
+<body>
+<div class="va-content">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+    <div><div class="va-h1">Meu painel</div><div class="va-sub" id="sub"></div></div>
+    <select id="selV" style="display:none;"></select>
+  </div>
+  <div id="body"><div class="empty">Carregando…</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+var u=VA.montar("dashboard.html");
+if(u){
+  var sb=VA.sb, brl=VA.brl, esc=VA.esc, $=function(s){return document.querySelector(s);};
+  var alvo=u.nome;
+  if(u.role==="admin"){ var sv=$("#selV"); sv.style.display="block"; sv.innerHTML='<option>Francisco</option><option>Matheus</option><option>Lorena</option>'; alvo=sv.value="Francisco"; sv.addEventListener("change",function(){ alvo=sv.value; carregar(); }); }
+  carregar();
+
+  async function carregar(){
+    $("#body").innerHTML='<div class="empty">Carregando…</div>';
+    $("#sub").textContent=alvo+" · "+new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+    var hoje=new Date(); var ini=new Date(hoje.getFullYear(),hoje.getMonth(),1).toISOString();
+    var d0=new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate()).toISOString();
+    var pr=await sb.from("va_parametros").select("valor").eq("chave","meta_diaria").limit(1);
+    var meta=30; if(!pr.error && pr.data && pr.data[0] && pr.data[0].valor && pr.data[0].valor[alvo]!=null) meta=pr.data[0].valor[alvo];
+    var it=await sb.from("va_interacoes").select("resultado,data").eq("vendedor",alvo).gte("data",ini);
+    var inter=(it.data||[]);
+    var hojeN=inter.filter(function(x){return x.data>=d0;}).length;
+    var mesN=inter.length;
+    var efetiv=inter.filter(function(x){return x.resultado && x.resultado!=="nao_atendeu";}).length;
+    var fl=await sb.from("vw_fila").select("bucket,segmento_primario").eq("vendedor_alvo",alvo).lt("bucket",9);
+    var fila=(fl.data||[]);
+    var ca=await sb.from("va_cliente_status").select("segmento_primario").eq("vendedor_dono",alvo).eq("status","cliente");
+    var cart=(ca.data||[]);
+
+    var bk=function(b){return fila.filter(function(f){return f.bucket===b;}).length;};
+    var pct=Math.min(100,Math.round(hojeN/(meta||1)*100));
+    function bySeg(arr){ var m={}; arr.forEach(function(x){ var s=x.segmento_primario||"—"; m[s]=(m[s]||0)+1; }); return m; }
+    function barsHTML(m){ var max=1; for(var k in m) if(m[k]>max)max=m[k]; var keys=Object.keys(m).sort(function(a,b){return m[b]-m[a];}); if(!keys.length) return '<div class="empty">—</div>'; return '<div class="bars">'+keys.map(function(k){ return '<div class="bar"><span>'+esc(k)+'</span><div class="track"><div class="fillb" style="width:'+Math.round(m[k]/max*100)+'%"></div></div><span style="text-align:right;color:var(--muted)">'+m[k]+'</span></div>'; }).join("")+'</div>'; }
+
+    $("#body").innerHTML=
+      '<div class="mrow">'
+        +'<div class="metric meta-big"><div class="lbl">Tarefas hoje</div><div class="val">'+hojeN+' <span style="font-size:15px;color:var(--muted)">/ '+meta+'</span></div><div class="prog"><div style="width:'+pct+'%"></div></div></div>'
+        +'<div class="metric"><div class="lbl">Tarefas no mês</div><div class="val">'+mesN+'</div></div>'
+        +'<div class="metric"><div class="lbl">Contatos efetivos (mês)</div><div class="val" style="color:var(--green)">'+efetiv+'</div></div>'
+        +'<div class="metric"><div class="lbl">Carteira (clientes)</div><div class="val">'+cart.length+'</div></div>'
+      +'</div>'
+      +'<div class="cols">'
+        +'<div class="card"><h3 style="font-size:14px;font-weight:600;margin-bottom:2px;">Fila de hoje por tipo</h3><div class="va-sub" style="margin:0;">'+fila.length+' contatos esperando</div>'
+          +barsHTML({Compromissos:bk(0),"Recompra na hora":bk(1),Reativar:bk(2),"Lead novo":bk(3)})+'</div>'
+        +'<div class="card"><h3 style="font-size:14px;font-weight:600;margin-bottom:2px;">Sua carteira por segmento</h3><div class="va-sub" style="margin:0;">'+cart.length+' clientes</div>'
+          +barsHTML(bySeg(cart))+'</div>'
+      +'</div>'
+      +'<div class="va-sub" style="margin-top:16px;">Vendas e margem por venda entram aqui quando ligarmos os pedidos do Bling — por enquanto o painel mostra a sua atividade, a fila e a carteira.</div>';
+  }
+}
+</script>
+</body>
+</html>

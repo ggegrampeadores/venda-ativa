@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Venda Ativa - GGE</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2330;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--muted2:#6e7681;--blue:#58a6ff;--green:#3fb950;--red:#f85149;--yellow:#d29922;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);line-height:1.5;}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 22px 60px;}
+  button{font-family:inherit;cursor:pointer;}
+  select,input{font-family:inherit;}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px;}
+  .top h1{font-size:19px;font-weight:600;}
+  .top .sub{font-size:12px;color:var(--muted);}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .controls select,.controls input{background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-size:13px;}
+  .controls .search{width:200px;}
+  .btn{font-size:13px;padding:8px 13px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);}
+  .btn:hover{border-color:#3d4757;}
+  .btn.primary{border-color:var(--blue);color:var(--blue);}
+  .btn.save{border-color:var(--green);color:var(--green);}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
+  .metric{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 13px;}
+  .metric .lbl{font-size:12px;color:var(--muted);}
+  .metric .val{font-size:21px;font-weight:600;margin-top:3px;}
+  .grid{display:grid;grid-template-columns:1.05fr 1fr;gap:16px;align-items:start;}
+  @media(max-width:880px){.grid{grid-template-columns:1fr;}}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 15px;}
+  .panel h2{font-size:14px;font-weight:600;margin-bottom:4px;}
+  .panel .hint{font-size:12px;color:var(--muted);margin-bottom:10px;}
+  .row{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:7px;display:flex;align-items:center;gap:10px;cursor:pointer;}
+  .row:hover{border-color:#3d4757;}
+  .row.sel{border-color:var(--blue);}
+  .row .main{flex:1;min-width:0;}
+  .row .nm{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row .meta{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .b{font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap;}
+  .b0{background:rgba(248,81,73,.18);color:#ff7b72;}
+  .b1{background:rgba(63,185,80,.15);color:#56d364;}
+  .b2{background:rgba(219,109,75,.18);color:#f0a48a;}
+  .b3{background:rgba(88,166,255,.15);color:#79c0ff;}
+  .acts{display:flex;gap:7px;font-size:15px;}
+  .acts a{text-decoration:none;}
+  .empty{color:var(--muted);text-align:center;padding:30px 10px;font-size:14px;}
+  .fhead{display:flex;align-items:center;gap:11px;flex-wrap:wrap;}
+  .avatar{width:40px;height:40px;border-radius:50%;background:rgba(88,166,255,.18);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;}
+  .fhead .nm{font-size:16px;font-weight:600;}
+  .fhead .who{font-size:12px;color:var(--muted);}
+  .tag{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--panel2);color:var(--muted);border:1px solid var(--border);}
+  .phones{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin-top:10px;}
+  .phones .pri{color:var(--blue);text-decoration:none;}.phones .alt{color:var(--muted);}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:13px;}
+  @media(max-width:520px){.two{grid-template-columns:1fr;}}
+  .sec .t{font-size:12px;color:var(--muted2);margin-bottom:5px;}
+  .sec .c{font-size:13px;line-height:1.7;border-top:1px solid var(--border);padding-top:8px;}
+  .inputs{margin-top:14px;background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.3);border-radius:10px;padding:12px 14px;}
+  .inputs .cap{font-size:12px;color:var(--blue);font-weight:600;margin-bottom:10px;}
+  .ig{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+  .ig .l{font-size:12px;color:var(--muted);margin-bottom:4px;}
+  .stepper{display:flex;align-items:center;gap:8px;}
+  .stepper button{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:16px;}
+  .stepper .n{font-size:18px;font-weight:600;min-width:16px;text-align:center;}
+  .inputs input{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:7px 9px;font-size:13px;}
+  .status-row{margin-top:13px;border-top:1px solid var(--border);padding-top:10px;}
+  .status-row .t{font-size:12px;color:var(--muted2);margin-bottom:7px;}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;}
+  .chip{font-size:12px;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);}
+  .chip.on{border-color:var(--blue);color:var(--blue);}
+  .ficha-actions{margin-top:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .saved{font-size:12px;color:var(--green);opacity:0;transition:opacity .2s;}
+  .saved.on{opacity:1;}
+  .overlay{position:fixed;inset:0;background:rgba(1,4,9,.7);display:none;align-items:flex-start;justify-content:center;z-index:50;padding:40px 16px;overflow-y:auto;}
+  .overlay.on{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:100%;max-width:640px;}
+  .mhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--panel);border-radius:14px 14px 0 0;}
+  .mhead .nm{font-size:16px;font-weight:600;}
+  .close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:18px;}
+  .close:hover{border-color:var(--red);color:var(--red);}
+  .mbody{padding:16px 18px 22px;}
+  .kv{font-size:13px;line-height:1.9;}
+  .kv b{color:var(--muted);font-weight:400;display:inline-block;min-width:140px;}
+  .banner{padding:9px 13px;border-radius:8px;font-size:13px;margin-bottom:12px;}
+  .banner.err{background:rgba(248,81,73,.12);color:#ff7b72;border:1px solid rgba(248,81,73,.3);}
+  .banner.ok{background:rgba(63,185,80,.12);color:#56d364;border:1px solid rgba(63,185,80,.3);}
+  .footnote{margin-top:22px;font-size:12px;color:var(--muted2);text-align:center;}
+  #login{position:fixed;inset:0;background:#0d1117;display:flex;align-items:center;justify-content:center;z-index:100;}
+  #login .box{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:28px 30px;width:300px;max-width:90vw;text-align:center;}
+  #login input{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:8px;color:#e6edf3;padding:10px;font-size:14px;margin-bottom:10px;}
+  #login button{width:100%;background:#1c2330;border:1px solid #58a6ff;color:#58a6ff;border-radius:8px;padding:10px;font-size:14px;}
+</style>
+</head>
+<body>
+<div id="login">
+  <div class="box">
+    <div style="font-size:18px;font-weight:600;margin-bottom:4px;">Venda Ativa GGE</div>
+    <div style="font-size:12px;color:#8b949e;margin-bottom:16px;">Acesso restrito</div>
+    <input id="pw" type="password" placeholder="Senha">
+    <button onclick="entrar()">Entrar</button>
+    <div id="loginErr" style="font-size:12px;color:#f85149;margin-top:8px;height:14px;"></div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="top">
+    <div><h1>Venda Ativa</h1><div class="sub" id="sub"></div></div>
+    <div class="controls">
+      <select id="selVend">
+        <option value="">Todos os vendedores</option>
+        <option>Francisco</option><option>Matheus</option><option>Lorena</option>
+      </select>
+      <select id="selSeg">
+        <option value="">Todos os segmentos</option>
+        <option>Linha Box</option><option>Grampos Industriais</option><option>Pinos</option>
+        <option>Pregos</option><option>Alicates</option><option>Diversos</option>
+      </select>
+      <input class="search" id="q" type="text" placeholder="Buscar empresa…" autocomplete="off">
+      <button class="btn" onclick="carregar()">Atualizar</button>
+    </div>
+  </div>
+  <div id="banner"></div>
+  <div class="metrics" id="metrics"></div>
+  <div class="grid">
+    <div class="panel">
+      <h2 id="filaTitulo">Fila do dia</h2>
+      <div class="hint">Compromissos no topo, depois recompra na hora, reativação e leads novos.</div>
+      <div id="lista"><div class="empty">—</div></div>
+    </div>
+    <div class="panel">
+      <div id="fichaVazia" class="empty">Selecione um contato na fila para abrir a ficha.</div>
+      <div id="ficha" style="display:none;"></div>
+    </div>
+  </div>
+  <div class="footnote">Venda Ativa GGE — dados ao vivo.</div>
+</div>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)fecharModal()">
+  <div class="modal">
+    <div class="mhead"><div class="nm" id="mTitle">Detalhes</div>
+      <button class="close" onclick="fecharModal()" aria-label="Fechar">×</button></div>
+    <div class="mbody" id="mBody"></div>
+  </div>
+</div>
+
+<script>
+const SB_URL=window.GGE_SUPABASE_URL||"https://opceujqpqyvxsatzdarg.supabase.co";
+const SB_KEY=window.GGE_SUPABASE_KEY||"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9wY2V1anFwcXl2eHNhdHpkYXJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NzIwMDEsImV4cCI6MjA4OTA0ODAwMX0.XKhgaNBJF8xiHiGEWEs8HL1dq5KFJpo2_RQckjsY9kc";
+const sb=supabase.createClient(SB_URL,SB_KEY);
+const OWNER_KEY="gge2026";
+const BUCKETS={0:["Compromisso","b0"],1:["Recompra","b1"],2:["Reativar","b2"],3:["Lead novo","b3"]};
+let fila=[], sel=null, currentFicha=null;
+
+const $=s=>document.querySelector(s);
+function banner(msg,tipo){ $("#banner").innerHTML = msg?'<div class="banner '+tipo+'">'+msg+'</div>':""; }
+function brl(n){ if(n==null) return "—"; return "R$ "+Math.round(n).toLocaleString("pt-BR"); }
+function digits(x){return (x||"").replace(/\D/g,"");}
+function waNum(x){let d=digits(x); if(d && d.length<=11) d="55"+d; return d;}
+
+function entrar(){
+  if($("#pw").value===OWNER_KEY){ sessionStorage.setItem("va_auth","1"); $("#login").style.display="none"; carregar(); }
+  else { $("#loginErr").textContent="Senha incorreta"; }
+}
+
+async function carregar(){
+  banner("");
+  $("#lista").innerHTML='<div class="empty">Carregando…</div>';
+  const v=$("#selVend").value, seg=$("#selSeg").value;
+  let qy=sb.from("vw_fila").select("*").lt("bucket",9);
+  if(v) qy=qy.eq("vendedor_alvo",v);
+  if(seg) qy=qy.eq("segmento_primario",seg);
+  qy=qy.order("bucket",{ascending:true}).order("valor_ref",{ascending:false,nullsFirst:false}).limit(40);
+  const r=await qy;
+  if(r.error){ banner("Erro ao carregar: "+r.error.message,"err"); $("#lista").innerHTML='<div class="empty">—</div>'; return; }
+  fila=r.data||[];
+  renderLista(); renderMetrics();
+  $("#sub").textContent=new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
+  $("#filaTitulo").textContent="Fila do dia"+(v?" · "+v:"")+(seg?" · "+seg:"");
+}
+
+function renderMetrics(){
+  const c=b=>fila.filter(f=>f.bucket===b).length;
+  $("#metrics").innerHTML=
+    '<div class="metric"><div class="lbl">Na fila</div><div class="val">'+fila.length+'</div></div>'+
+    '<div class="metric"><div class="lbl">Compromissos</div><div class="val" style="color:var(--red)">'+c(0)+'</div></div>'+
+    '<div class="metric"><div class="lbl">Recompra na hora</div><div class="val" style="color:var(--green)">'+c(1)+'</div></div>'+
+    '<div class="metric"><div class="lbl">Reativar / Leads</div><div class="val">'+c(2)+' / '+c(3)+'</div></div>';
+}
+
+function renderLista(){
+  if(!fila.length){ $("#lista").innerHTML='<div class="empty">Nada na fila para este filtro.</div>'; return; }
+  $("#lista").innerHTML=fila.map(f=>{
+    const b=BUCKETS[f.bucket]||["",""]; const wpp=waNum(f.celular);
+    return '<div class="row '+(sel===f.documento?'sel':'')+'" onclick="abrirFicha(\''+f.documento+'\')">'+
+      '<div class="main"><div class="nm">'+(f.empresa||f.documento)+'</div>'+
+      '<div class="meta">'+(f.segmento_primario||"—")+' · '+(f.municipio||"")+(f.uf?"/"+f.uf:"")+' · '+brl(f.valor_ref)+'</div></div>'+
+      '<span class="b '+b[1]+'">'+b[0]+'</span>'+
+      '<span class="acts">'+(wpp?'<a href="https://wa.me/'+wpp+'" target="_blank" title="WhatsApp" onclick="event.stopPropagation()" style="color:var(--green)">✦</a>':"")+'</span>'+
+    '</div>';
+  }).join("");
+}
+
+async function abrirFicha(doc){
+  sel=doc; renderLista();
+  $("#fichaVazia").style.display="none"; $("#ficha").style.display="block";
+  $("#ficha").innerHTML='<div class="empty">Carregando…</div>';
+  const r=await sb.from("vw_ficha_cliente").select("*").eq("documento",doc).limit(1);
+  if(r.error||!r.data||!r.data.length){ $("#ficha").innerHTML='<div class="empty">Não foi possível abrir a ficha.</div>'; return; }
+  const f=r.data[0]; currentFicha=f;
+  const ini=(f.empresa||"?").trim().slice(0,2).toUpperCase();
+  const tent=f.tentativas||0;
+  $("#ficha").innerHTML=
+    '<div class="fhead"><div class="avatar">'+ini+'</div>'+
+      '<div style="flex:1;min-width:0;"><div class="nm">'+(f.empresa||f.nome||f.documento)+'</div>'+
+      '<div class="who">'+(f.pessoa_contato?f.pessoa_contato+" · ":"")+(f.municipio||"")+(f.uf?"/"+f.uf:"")+'</div></div>'+
+      '<span class="tag">'+(f.status||"")+'</span><span class="tag">'+(f.segmento_primario||"")+'</span></div>'+
+    '<div class="phones">'+
+      (f.celular?'<a class="pri" href="https://wa.me/'+waNum(f.celular)+'" target="_blank">✆ '+f.celular+'</a>':'<span class="alt">sem celular</span>')+
+      (f.telefone?'<span class="alt">tel: '+f.telefone+'</span>':"")+
+      (f.email?'<span class="alt">'+f.email+'</span>':"")+'</div>'+
+    '<div class="two">'+
+      '<div class="sec"><div class="t">Compras</div><div class="c">Última: '+(f.ultima_compra||"—")+'<br>12 meses: '+brl(f.total_12m)+'<br>Total: '+brl(f.total_all)+'<br>Pedidos: '+(f.n_pedidos||"—")+'</div></div>'+
+      '<div class="sec"><div class="t">Top produtos</div><div class="c">'+(f.top_prod5||f.razao_social||"—")+'</div></div></div>'+
+    '<div class="inputs"><div class="cap">Só isto você registra</div><div class="ig">'+
+      '<div><div class="l">Tentativas até falar</div><div class="stepper"><button onclick="bump(-1)">−</button><span class="n" id="att">'+tent+'</span><button onclick="bump(1)">+</button></div></div>'+
+      '<div><div class="l">Próxima ligação (vira compromisso)</div><input id="prox" type="date" value="'+(f.proxima_data||"")+'"></div>'+
+      '<div><div class="l">Lembrete</div><input id="lemb" type="text" placeholder="ex.: pediu cotação" value="'+(f.lembrete||"").replace(/"/g,"&quot;")+'"></div>'+
+    '</div></div>'+
+    '<div class="status-row"><div class="t">Situação</div><div class="chips">'+
+      ["lead","prospect","cliente","nao_atendeu","mala_direta","encerrado"].map(st=>'<button class="chip '+(f.status===st?'on':'')+'" onclick="setStatus(this,\''+st+'\')">'+st+'</button>').join("")+
+    '</div></div>'+
+    '<div class="ficha-actions"><button class="btn primary" onclick="verDetalhes()">Ver tudo</button>'+
+      '<button class="btn save" onclick="salvar(\''+doc+'\')">Salvar registro</button>'+
+      '<span class="saved" id="savedMsg">✓ salvo</span></div>';
+  $("#ficha").dataset.status=f.status||"";
+}
+
+function bump(n){ const e=$("#att"); e.textContent=Math.max(0,(parseInt(e.textContent)||0)+n); }
+function setStatus(btn,st){ document.querySelectorAll(".chip").forEach(c=>c.classList.remove("on")); btn.classList.add("on"); $("#ficha").dataset.status=st; }
+
+async function salvar(doc){
+  const tent=parseInt($("#att").textContent)||0;
+  const prox=$("#prox").value||null;
+  const lemb=$("#lemb").value||null;
+  const status=$("#ficha").dataset.status||null;
+  const vend=$("#selVend").value||null;
+  const upd={tentativas:tent,lembrete:lemb,proxima_data:prox,status:status,atualizado_em:new Date().toISOString()};
+  if(prox) upd.compromisso=true;
+  const r=await sb.from("va_cliente_status").update(upd).eq("documento",doc);
+  if(r.error){ banner("Erro ao salvar: "+r.error.message,"err"); return; }
+  await sb.from("va_interacoes").insert({documento:doc,vendedor:vend,resultado:status,tentativas_no_contato:tent,nota:lemb});
+  const m=$("#savedMsg"); m.classList.add("on"); setTimeout(()=>m.classList.remove("on"),1600);
+  banner("Registro salvo.","ok"); setTimeout(()=>banner(""),1800);
+}
+
+function verDetalhes(){
+  const f=currentFicha; if(!f) return;
+  $("#mTitle").textContent=f.empresa||f.nome||f.documento;
+  $("#mBody").innerHTML='<div class="kv">'+
+    '<b>Documento</b> '+f.documento+' ('+(f.tipo_doc||"")+')<br>'+
+    '<b>Origem</b> '+(f.origem||"—")+' · pool '+(f.pool||"—")+'<br>'+
+    '<b>Dono</b> '+(f.vendedor_dono||"(não atribuído)")+'<br>'+
+    '<b>Segmento</b> '+(f.segmento_primario||"—")+'<br>'+
+    '<b>Contato</b> '+(f.pessoa_contato||"—")+'<br>'+
+    '<b>Celular</b> '+(f.celular||"—")+' &nbsp; <b>Tel</b> '+(f.telefone||"—")+'<br>'+
+    '<b>E-mail</b> '+(f.email||"—")+'<br>'+
+    '<b>Cidade/UF</b> '+(f.municipio||"—")+(f.uf?"/"+f.uf:"")+'<br>'+
+    '<b>Última compra</b> '+(f.ultima_compra||"—")+'<br>'+
+    '<b>Próxima (sugerida)</b> '+(f.proxima_data||"—")+'<br>'+
+    '<b>Compras 3/6/12m</b> '+brl(f.total_3m)+' / '+brl(f.total_6m)+' / '+brl(f.total_12m)+'<br>'+
+    '<b>Total histórico</b> '+brl(f.total_all)+' · '+(f.n_pedidos||"—")+' pedidos<br>'+
+    '<b>Top produtos</b> '+(f.top_prod5||"—")+'<br>'+
+    '<b>Razão social</b> '+(f.razao_social||"—")+'<br>'+
+    '<b>Atividade (CNAE)</b> '+(f.atividade_principal||"—")+'<br>'+
+    '<b>Porte / func.</b> '+(f.porte||"—")+' '+(f.num_empregados?("· "+f.num_empregados+" func."):"")+'<br>'+
+    '<b>Site</b> '+(f.url_empresa||"—")+'</div>';
+  $("#overlay").classList.add("on");
+}
+function fecharModal(){ $("#overlay").classList.remove("on"); }
+document.addEventListener("keydown",e=>{ if(e.key==="Escape")fecharModal(); });
+
+let qtmr=null;
+$("#q").addEventListener("input",function(){
+  clearTimeout(qtmr); const v=this.value.trim();
+  if(v.length<2) return;
+  qtmr=setTimeout(async()=>{
+    const r=await sb.from("vw_ficha_cliente").select("documento,empresa,segmento_primario,municipio,uf,celular,total_all,status").ilike("empresa","%"+v+"%").limit(20);
+    if(r.error) return;
+    fila=(r.data||[]).map(d=>Object.assign({},d,{bucket:9,valor_ref:d.total_all}));
+    $("#filaTitulo").textContent='Busca: "'+v+'"';
+    renderLista();
+  },350);
+});
+$("#selVend").addEventListener("change",carregar);
+$("#selSeg").addEventListener("change",carregar);
+$("#pw").addEventListener("keydown",e=>{ if(e.key==="Enter")entrar(); });
+if(sessionStorage.getItem("va_auth")==="1"){ $("#login").style.display="none"; carregar(); }
+</script>
+</body>
+</html>
