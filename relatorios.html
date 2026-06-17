@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relatórios · Venda Ativa</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .ctrls{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
+  td.r,th.r{text-align:right;}
+  td.v{font-weight:600;}
+  .note{margin-top:16px;}
+  .note textarea{width:100%;min-height:90px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:13px;font-family:inherit;}
+</style>
+</head>
+<body>
+<div class="va-content">
+  <div class="va-h1">Relatórios</div>
+  <div class="va-sub">Resumo da atividade do período. Vai ficando mais rico conforme a equipe registra os contatos.</div>
+  <div class="ctrls">
+    <label style="font-size:13px;color:var(--muted);">Mês:</label>
+    <select id="mes"></select>
+    <select id="selV" style="display:none;"></select>
+    <button class="btn" onclick="carregar()">Ver</button>
+  </div>
+  <div id="body"><div class="empty">Carregando…</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+var u=VA.montar("relatorios.html");
+if(u){
+  var sb=VA.sb, esc=VA.esc, $=function(s){return document.querySelector(s);};
+  var meses=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  var sel=$("#mes"); var now=new Date();
+  for(var i=0;i<6;i++){ var d=new Date(now.getFullYear(),now.getMonth()-i,1); var v=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); sel.innerHTML+='<option value="'+v+'">'+meses[d.getMonth()]+"/"+d.getFullYear()+'</option>'; }
+  var fv=$("#selV");
+  if(u.role==="admin"){ fv.style.display="block"; fv.innerHTML='<option value="">Todos</option><option>Francisco</option><option>Matheus</option><option>Lorena</option>'; }
+  carregar();
+
+  async function carregar(){
+    $("#body").innerHTML='<div class="empty">Carregando…</div>';
+    var ym=sel.value.split("-"); var y=parseInt(ym[0]), m=parseInt(ym[1])-1;
+    var ini=new Date(y,m,1).toISOString(); var fim=new Date(y,m+1,1).toISOString();
+    var alvo=(u.role==="admin")?fv.value:u.nome;
+    var qy=sb.from("va_interacoes").select("vendedor,resultado,data,documento").gte("data",ini).lt("data",fim).limit(20000);
+    if(alvo) qy=qy.eq("vendedor",alvo);
+    var r=await qy;
+    if(r.error){ $("#body").innerHTML='<div class="card">Erro: '+r.error.message+'</div>'; return; }
+    var I=r.data||[];
+    var tarefas=I.length;
+    var efetivos=I.filter(function(x){return x.resultado && x.resultado!=="nao_atendeu";}).length;
+    var vendas=I.filter(function(x){return x.resultado==="venda";}).length;
+    var propostas=I.filter(function(x){return x.resultado==="proposta";}).length;
+    var docs={}; I.forEach(function(x){ if(x.documento) docs[x.documento]=1; });
+    var empresas=Object.keys(docs).length;
+
+    var res={}; I.forEach(function(x){ var k=x.resultado||"(sem)"; res[k]=(res[k]||0)+1; });
+    var resRows=Object.keys(res).sort(function(a,b){return res[b]-res[a];}).map(function(k){ return '<tr><td>'+esc(k)+'</td><td class="r">'+res[k]+'</td></tr>'; }).join("")||'<tr><td colspan="2" style="color:var(--muted)">Nenhum contato registrado neste mês ainda.</td></tr>';
+
+    var perV="";
+    if(u.role==="admin" && !alvo){
+      var vs=["Francisco","Matheus","Lorena"];
+      perV='<div class="card" style="margin-top:16px;"><h3 style="font-size:14px;font-weight:600;margin-bottom:10px;">Por vendedor</h3><table class="tbl"><thead><tr><th>Vendedor</th><th class="r">Tarefas</th><th class="r">Efetivos</th><th class="r">Propostas</th><th class="r">Vendas</th></tr></thead><tbody>'
+        +vs.map(function(v){ var iv=I.filter(function(x){return x.vendedor===v;}); return '<tr><td class="v">'+v+'</td><td class="r">'+iv.length+'</td><td class="r">'+iv.filter(function(x){return x.resultado&&x.resultado!=="nao_atendeu";}).length+'</td><td class="r">'+iv.filter(function(x){return x.resultado==="proposta";}).length+'</td><td class="r" style="color:var(--green)">'+iv.filter(function(x){return x.resultado==="venda";}).length+'</td></tr>'; }).join("")
+        +'</tbody></table></div>';
+    }
+
+    $("#body").innerHTML=
+      '<div class="mrow">'
+        +'<div class="metric"><div class="lbl">Tarefas</div><div class="val">'+tarefas+'</div></div>'
+        +'<div class="metric"><div class="lbl">Contatos efetivos</div><div class="val" style="color:var(--green)">'+efetivos+'</div></div>'
+        +'<div class="metric"><div class="lbl">Propostas</div><div class="val">'+propostas+'</div></div>'
+        +'<div class="metric"><div class="lbl">Empresas tocadas</div><div class="val">'+empresas+'</div></div>'
+      +'</div>'
+      +'<div class="card"><h3 style="font-size:14px;font-weight:600;margin-bottom:10px;">Resultados dos contatos</h3><table class="tbl" style="max-width:360px;"><thead><tr><th>Resultado</th><th class="r">Qtd</th></tr></thead><tbody>'+resRows+'</tbody></table></div>'
+      +perV
+      +'<div class="card note" style="margin-top:16px;"><h3 style="font-size:14px;font-weight:600;margin-bottom:6px;">Comentário do período</h3><div class="va-sub" style="margin:0 0 8px;">Espaço para o vendedor complementar o relatório (a IA vai gerar um resumo automático aqui numa próxima etapa).</div><textarea placeholder="Ex.: mês forte na Linha Box; dois clientes grandes reativados; concorrente baixou preço em grampo 80…"></textarea></div>'
+      +'<div class="va-sub" style="margin-top:14px;">Fechamento completo (faturamento, novos clientes, margem por segmento) entra quando ligarmos as vendas do Bling.</div>';
+  }
+}
+</script>
+</body>
+</html>

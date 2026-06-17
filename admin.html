@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visão geral · Venda Ativa</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .cols{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start;}
+  @media(max-width:860px){.cols{grid-template-columns:1fr;}}
+  .bars{display:flex;flex-direction:column;gap:8px;margin-top:8px;}
+  .bar{display:grid;grid-template-columns:130px 1fr 44px;align-items:center;gap:10px;font-size:13px;}
+  .track{height:9px;background:var(--panel2);border-radius:6px;overflow:hidden;}
+  .fillb{height:100%;background:var(--blue);border-radius:6px;}
+  td.r,th.r{text-align:right;}
+  td.v{font-weight:600;}
+</style>
+</head>
+<body>
+<div class="va-content">
+  <div class="va-h1">Visão geral</div>
+  <div class="va-sub" id="sub">Desempenho do setor de vendas</div>
+  <div id="body"><div class="empty">Carregando…</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+var u=VA.montar("admin.html");
+if(u){
+  var sb=VA.sb, brl=VA.brl, esc=VA.esc, $=function(s){return document.querySelector(s);};
+  if(u.role!=="admin"){ $("#body").innerHTML='<div class="card">Esta página é só do Administrador.</div>'; }
+  else { carregar(); }
+
+  async function carregar(){
+    var hoje=new Date(); var ini=new Date(hoje.getFullYear(),hoje.getMonth(),1).toISOString();
+    $("#sub").textContent="Desempenho do setor · "+hoje.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+    var cs=await sb.from("va_cliente_status").select("vendedor_dono,status,segmento_primario,pool").limit(5000);
+    var fl=await sb.from("vw_fila").select("vendedor_alvo,bucket").lt("bucket",9).limit(5000);
+    var it=await sb.from("va_interacoes").select("vendedor,resultado,data").gte("data",ini).limit(10000);
+    if(cs.error){ $("#body").innerHTML='<div class="card">Erro: '+cs.error.message+'</div>'; return; }
+    var C=cs.data||[], F=(fl.data||[]), I=(it.data||[]);
+
+    var totFichas=C.length;
+    var totCli=C.filter(function(x){return x.status==="cliente";}).length;
+    var totLead=C.filter(function(x){return x.status==="lead";}).length;
+    var filaHoje=F.length;
+
+    var vends=["Francisco","Matheus","Lorena"];
+    function carteira(v){ return C.filter(function(x){return x.vendedor_dono===v && x.status==="cliente";}).length; }
+    function fila(v){ return F.filter(function(x){return x.vendedor_alvo===v;}).length; }
+    function tarefas(v){ return I.filter(function(x){return x.vendedor===v;}).length; }
+    function efetivos(v){ return I.filter(function(x){return x.vendedor===v && x.resultado && x.resultado!=="nao_atendeu";}).length; }
+
+    var linhas=vends.map(function(v){
+      return '<tr><td class="v">'+v+'</td><td class="r">'+carteira(v)+'</td><td class="r">'+fila(v)+'</td><td class="r">'+tarefas(v)+'</td><td class="r" style="color:var(--green)">'+efetivos(v)+'</td></tr>';
+    }).join("");
+
+    var seg={}; C.forEach(function(x){ var s=x.segmento_primario||"—"; seg[s]=(seg[s]||0)+1; });
+    var max=1; for(var k in seg) if(seg[k]>max)max=seg[k];
+    var segKeys=Object.keys(seg).sort(function(a,b){return seg[b]-seg[a];});
+    var segBars='<div class="bars">'+segKeys.map(function(k){ return '<div class="bar"><span>'+esc(k)+'</span><div class="track"><div class="fillb" style="width:'+Math.round(seg[k]/max*100)+'%"></div></div><span style="text-align:right;color:var(--muted)">'+seg[k]+'</span></div>'; }).join("")+'</div>';
+
+    $("#body").innerHTML=
+      '<div class="mrow">'
+        +'<div class="metric"><div class="lbl">Contatos no banco</div><div class="val">'+totFichas.toLocaleString("pt-BR")+'</div></div>'
+        +'<div class="metric"><div class="lbl">Clientes</div><div class="val" style="color:var(--green)">'+totCli+'</div></div>'
+        +'<div class="metric"><div class="lbl">Leads</div><div class="val" style="color:var(--blue)">'+totLead+'</div></div>'
+        +'<div class="metric"><div class="lbl">Na fila hoje</div><div class="val">'+filaHoje+'</div></div>'
+      +'</div>'
+      +'<div class="cols">'
+        +'<div class="card"><h3 style="font-size:14px;font-weight:600;margin-bottom:10px;">Por vendedor (mês atual)</h3>'
+          +'<table class="tbl"><thead><tr><th>Vendedor</th><th class="r">Carteira</th><th class="r">Fila hoje</th><th class="r">Tarefas mês</th><th class="r">Efetivos</th></tr></thead><tbody>'+linhas+'</tbody></table>'
+          +'<div class="va-sub" style="margin-top:10px;">Vendas, faturamento e margem por vendedor entram aqui quando ligarmos os pedidos do Bling.</div></div>'
+        +'<div class="card"><h3 style="font-size:14px;font-weight:600;margin-bottom:2px;">Contatos por segmento</h3><div class="va-sub" style="margin:0;">'+totFichas.toLocaleString("pt-BR")+' no total</div>'+segBars+'</div>'
+      +'</div>';
+  }
+}
+</script>
+</body>
+</html>
