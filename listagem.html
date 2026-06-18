@@ -55,29 +55,38 @@ if(u){
 
   window.carregar=async function(){
     $("#count").textContent="Carregando…";
-    var qy=sb.from("vw_ficha_cliente").select("empresa,segmento_primario,status,origem,pool,vendedor_dono,uf,municipio,celular,email,ultima_compra,ultimo_contato,proxima_data,total_12m,total_all,documento");
     var seg=$("#fSeg").value, st=$("#fStatus").value, vd=fv.value, q=$("#q").value.trim(), og=$("#fOrig").value, um=$("#fUlt").value, pool=$("#fPool").value;
-    if(seg) qy=qy.eq("segmento_primario",seg);
-    if(st) qy=qy.eq("status",st);
-    if(og) qy=qy.eq("origem",og);
-    if(pool==="__ORC__") qy=qy.eq("orcamento_sem_retorno",true);
-    else if(pool) qy=qy.eq("pool",pool);
-    if(vd==="__GGE__") qy=qy.is("vendedor_dono",null);
-    else if(vd==="__MINE__") qy=qy.eq("vendedor_dono",u.nome);
-    else if(vd) qy=qy.eq("vendedor_dono",vd);
-    if(um){ var dd=new Date(); dd.setMonth(dd.getMonth()-parseInt(um)); var cut=dd.toISOString().slice(0,10); qy=qy.or("ultimo_contato.is.null,ultimo_contato.lte."+cut); }
-    if(q) qy=qy.ilike("empresa","%"+q+"%");
-    qy=qy.order("total_all",{ascending:false,nullsFirst:false}).limit(1000);
-    var r=await qy;
-    if(r.error){ $("#count").textContent="Erro: "+r.error.message; return; }
-    rows=r.data||[]; sortKey="total_all"; sortDir=-1; render();
+    function makeQ(){
+      var qy=sb.from("vw_ficha_cliente").select("empresa,segmento_primario,status,origem,pool,vendedor_dono,uf,municipio,celular,email,ultima_compra,ultimo_contato,proxima_data,total_12m,total_all,documento");
+      if(seg) qy=qy.eq("segmento_primario",seg);
+      if(st) qy=qy.eq("status",st);
+      if(og) qy=qy.eq("origem",og);
+      if(pool==="__ORC__") qy=qy.eq("orcamento_sem_retorno",true);
+      else if(pool) qy=qy.eq("pool",pool);
+      if(vd==="__GGE__") qy=qy.is("vendedor_dono",null);
+      else if(vd==="__MINE__") qy=qy.eq("vendedor_dono",u.nome);
+      else if(vd) qy=qy.eq("vendedor_dono",vd);
+      if(um){ var dd=new Date(); dd.setMonth(dd.getMonth()-parseInt(um)); var cut=dd.toISOString().slice(0,10); qy=qy.or("ultimo_contato.is.null,ultimo_contato.lte."+cut); }
+      if(q) qy=qy.ilike("empresa","%"+q+"%");
+      return qy.order("total_all",{ascending:false,nullsFirst:false});
+    }
+    // a API do Supabase corta em 1000 linhas/requisição → busca paginada
+    var all=[], from=0, size=1000;
+    while(true){
+      var r=await makeQ().range(from,from+size-1);
+      if(r.error){ $("#count").textContent="Erro: "+r.error.message; return; }
+      var d=r.data||[]; all=all.concat(d);
+      if(d.length<size || from>=50000) break;
+      from+=size;
+    }
+    rows=all; sortKey="total_all"; sortDir=-1; render();
   };
   function fmt(v,t){ if(t==="n") return brl(v); return v==null||v===""?"—":esc(v); }
   function stPill(s){ var c=s==="cliente"?"s-cliente":s==="lead"?"s-lead":s==="prospect"?"s-prospect":"s-outro"; return '<span class="stb '+c+'">'+esc(s||"—")+'</span>'; }
   function origLabel(o){ return o==="mercadolivre"?"Merc. Livre":o==="bling_b2b"?"Bling":o==="manual"?"Nova":"—"; }
   function render(){
     rows.sort(function(a,b){ var x=a[sortKey],y=b[sortKey]; if(x==null)return 1; if(y==null)return -1; if(typeof x==="number"||!isNaN(x)&&typeof y!=="string"){} x=(typeof x==="string")?x.toLowerCase():x; y=(typeof y==="string")?y.toLowerCase():y; return (x<y?-1:x>y?1:0)*sortDir; });
-    $("#count").textContent=rows.length+" registros"+(rows.length===1000?" (limite de 1000 — refine o filtro)":"");
+    $("#count").textContent=rows.length+" registros";
     $("#tbl thead").innerHTML="<tr>"+COLS.map(function(c){ var arrow=(c[0]===sortKey)?(sortDir<0?" ↓":" ↑"):""; return '<th class="'+(c[2]==="n"?"r":"")+'" onclick="ordenar(\''+c[0]+'\')">'+c[1]+arrow+'</th>'; }).join("")+"</tr>";
     $("#tbl tbody").innerHTML=rows.map(function(row){
       return "<tr>"+COLS.map(function(c){

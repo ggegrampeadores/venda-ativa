@@ -17,6 +17,7 @@
   .bk{font-size:11px;padding:2px 8px;border-radius:999px;white-space:nowrap;}
   .bk0{background:rgba(248,81,73,.18);color:#ff7b72;}.bk1{background:rgba(63,185,80,.15);color:#56d364;}
   .bk2{background:rgba(219,109,75,.18);color:#f0a48a;}.bk3{background:rgba(88,166,255,.15);color:#79c0ff;}
+  .bk4{background:rgba(163,113,247,.18);color:#b392f0;}
   .wa{color:var(--green);font-size:15px;}
   .fhead{display:flex;align-items:center;gap:11px;flex-wrap:wrap;}
   .avatar{width:40px;height:40px;border-radius:50%;background:rgba(88,166,255,.18);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;}
@@ -70,7 +71,7 @@
 var u = VA.montar("contatos.html");
 if(u){
   var sb=VA.sb, brl=VA.brl, waNum=VA.waNum, esc=VA.esc;
-  var BK={0:["Compromisso","bk0"],1:["Recompra","bk1"],2:["Reativar","bk2"],3:["Lead novo","bk3"]};
+  var BK={0:["Compromisso","bk0"],1:["Recompra","bk1"],2:["Reativar","bk2"],3:["Lead novo","bk3"],4:["Orçamento","bk4"]};
   var fila=[], sel=null, currentFicha=null;
   var $=function(s){return document.querySelector(s);};
   function banner(m,t){ $("#banner").innerHTML = m?'<div class="banner '+t+'">'+m+'</div>':""; }
@@ -144,7 +145,7 @@ if(u){
     if(r.error||!r.data||!r.data.length){ $("#ficha").innerHTML='<div class="empty">Não foi possível abrir.</div>'; return; }
     var f=r.data[0]; currentFicha=f;
     var ini=(f.empresa||"?").trim().slice(0,2).toUpperCase(); var tent=f.tentativas||0;
-    var st=["lead","prospect","cliente","nao_atendeu","mala_direta","encerrado"];
+    var st=["lead","prospect","cliente","venda_digital","nao_atendeu","mala_direta","encerrado"];
     $("#ficha").innerHTML=
       '<div class="fhead"><div class="avatar">'+esc(ini)+'</div><div style="flex:1;min-width:0;"><div class="nm" style="font-size:16px;font-weight:600;">'+esc(f.empresa||f.nome||f.documento)+'</div>'
       +'<div style="font-size:12px;color:var(--muted);">'+(f.pessoa_contato?esc(f.pessoa_contato)+" · ":"")+esc(f.municipio||"")+(f.uf?"/"+f.uf:"")+'</div></div>'
