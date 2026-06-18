@@ -9,7 +9,7 @@
   .ctrls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
   .tablewrap{overflow:auto;max-height:72vh;border:1px solid var(--border);border-radius:10px;}
   .count{font-size:12px;color:var(--muted);margin-bottom:8px;}
-  td.r,th.r{text-align:right;}
+  table.tbl td.r, table.tbl th.r{text-align:right;}
   .stb{font-size:11px;padding:2px 7px;border-radius:999px;}
   .s-cliente{background:rgba(63,185,80,.15);color:#56d364;}.s-lead{background:rgba(88,166,255,.15);color:#79c0ff;}
   .s-prospect{background:rgba(210,153,34,.15);color:#e3b341;}.s-outro{background:var(--panel2);color:var(--muted);}
@@ -24,7 +24,7 @@
   <div class="va-sub">O banco inteiro de contatos, como uma planilha. Filtre, ordene (clique no cabeçalho) e exporte.</div>
   <div class="ctrls">
     <select id="fSeg"><option value="">Segmento</option><option>Linha Box</option><option>Grampos Industriais</option><option>Pinos</option><option>Pregos</option><option>Alicates</option><option>Combos</option><option>Diversos</option></select>
-    <select id="fStatus"><option value="">Situação</option><option>cliente</option><option>lead</option><option>prospect</option><option>nao_atendeu</option><option>mala_direta</option><option>encerrado</option></select>
+    <select id="fStatus"><option value="">Situação</option><option value="cliente">Cliente</option><option value="lead">Lead</option><option value="prospect">Prospect</option><option value="venda_digital">Venda digital</option><option value="encerrado">Encerrado (lixeira)</option><option value="nao_atendeu">Não atendeu</option><option value="mala_direta">Mala direta</option></select>
     <select id="fOrig"><option value="">Origem</option><option value="mercadolivre">Mercado Livre / Segunda Venda</option><option value="bling_b2b">Bling</option><option value="manual">Nova (Neco)</option></select>
     <select id="fUlt"><option value="">Último contato</option><option value="1">Sem contato +1 mês</option><option value="3">Sem contato +3 meses</option><option value="6">Sem contato +6 meses</option><option value="12">Sem contato +12 meses</option></select>
     <select id="fVend"></select>
@@ -81,7 +81,12 @@ if(u){
     $("#tbl thead").innerHTML="<tr>"+COLS.map(function(c){ var arrow=(c[0]===sortKey)?(sortDir<0?" ↓":" ↑"):""; return '<th class="'+(c[2]==="n"?"r":"")+'" onclick="ordenar(\''+c[0]+'\')">'+c[1]+arrow+'</th>'; }).join("")+"</tr>";
     $("#tbl tbody").innerHTML=rows.map(function(row){
       return "<tr>"+COLS.map(function(c){
-        if(c[0]==="status") return "<td>"+stPill(row[c[0]])+"</td>";
+        if(c[0]==="status"){
+          var sc=row.status||"";
+          var sopts=[["cliente","Cliente"],["lead","Lead"],["prospect","Prospect"],["venda_digital","Venda digital"],["nao_atendeu","Não atendeu"],["mala_direta","Mala direta"],["encerrado","Encerrado (lixeira)"]];
+          var so=sopts.map(function(p){return '<option value="'+p[0]+'"'+(p[0]===sc?" selected":"")+'>'+p[1]+'</option>';}).join("");
+          return '<td><select class="dono" onchange="mudarStatus(\''+row.documento+'\',this.value,this)">'+so+'</select></td>';
+        }
         if(c[0]==="empresa") return '<td title="'+esc(row.empresa||"")+'">'+fmt(row[c[0]],c[2])+"</td>";
         if(c[0]==="vendedor_dono"){
           var dono=row.vendedor_dono||"GGE";
@@ -111,6 +116,16 @@ if(u){
     else if(fNow==="__MINE__") sai=(v!==u.nome);
     else if(fNow) sai=(v!==fNow);
     if(sai){ rows=rows.filter(function(x){return x.documento!==doc;}); render(); return; }
+    el.style.borderColor="#3fb950"; setTimeout(function(){ el.style.borderColor=""; },1200);
+  };
+  window.mudarStatus=async function(doc,val,el){
+    el.disabled=true;
+    var r=await sb.from("va_cliente_status").update({status:val,atualizado_em:new Date().toISOString()}).eq("documento",doc);
+    el.disabled=false;
+    if(r.error){ alert("Erro ao mudar a situação: "+r.error.message); return; }
+    for(var i=0;i<rows.length;i++){ if(rows[i].documento===doc){ rows[i].status=val; break; } }
+    var stNow=$("#fStatus").value;
+    if(stNow && stNow!==val){ rows=rows.filter(function(x){return x.documento!==doc;}); render(); return; }
     el.style.borderColor="#3fb950"; setTimeout(function(){ el.style.borderColor=""; },1200);
   };
   $("#q").addEventListener("keydown",function(e){ if(e.key==="Enter")carregar(); });
