@@ -101,9 +101,16 @@ if(u){
     el.disabled=false;
     if(r.error){ alert("Erro ao mudar o vendedor: "+r.error.message); return; }
     for(var i=0;i<rows.length;i++){ if(rows[i].documento===doc){ rows[i].vendedor_dono=v; break; } }
+    // Fluxo "Limpar": se há filtro de vendedor ativo e a linha não pertence mais a ele, sai da lista na hora
+    var fNow=fv.value, sai=false;
+    if(fNow==="__GGE__") sai=(v!==null);
+    else if(fNow==="__MINE__") sai=(v!==u.nome);
+    else if(fNow) sai=(v!==fNow);
+    if(sai){ rows=rows.filter(function(x){return x.documento!==doc;}); render(); return; }
     el.style.borderColor="#3fb950"; setTimeout(function(){ el.style.borderColor=""; },1200);
   };
   $("#q").addEventListener("keydown",function(e){ if(e.key==="Enter")carregar(); });
+  fv.addEventListener("change",carregar);
   carregar();
 }
 </script>

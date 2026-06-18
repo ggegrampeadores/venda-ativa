@@ -75,6 +75,32 @@ if(u){
   var $=function(s){return document.querySelector(s);};
   function banner(m,t){ $("#banner").innerHTML = m?'<div class="banner '+t+'">'+m+'</div>':""; }
 
+  // Pesos da fila (va_parametros) — ranqueiam a fila por vendedor
+  var PARAMS={};
+  function pvObj(obj,V,flatKeys,def){
+    if(obj&&obj[V]) return obj[V];
+    if(obj&&flatKeys.some(function(k){return obj[k]!=null;})) return obj;
+    return def;
+  }
+  function rankFila(){
+    var V=(u.role==="admin")?selV.value:u.nome;
+    if(!V) return; // "Todos": mantém ordem por balde + valor
+    var rank=pvObj(PARAMS.pesos_ranking,V,["timing","valor","ja_cliente"],{timing:40,valor:30,ja_cliente:30});
+    var mix=pvObj(PARAMS.mix_fila,V,["recompra","reativar","lead"],{recompra:40,reativar:30,lead:30});
+    var seg=(PARAMS.pesos_segmento&&PARAMS.pesos_segmento[V])||{};
+    var maxVal=1; fila.forEach(function(f){ if((f.valor_ref||0)>maxVal)maxVal=f.valor_ref; });
+    fila.forEach(function(f){
+      if(f.bucket===0){ f._score=1e9; return; }      // compromissos do dia: topo fixo
+      var valorS=(f.valor_ref||0)/maxVal;
+      var timingS=Math.max(0,Math.min(1,((f.dias||0)+30)/60));
+      var jaS=(f.status==="cliente")?1:0;
+      var bW=f.bucket===1?(mix.recompra||0):f.bucket===2?(mix.reativar||0):(mix.lead||0);
+      var sW=seg[f.segmento_primario]||0;
+      f._score=(rank.timing||0)*timingS+(rank.valor||0)*valorS+(rank.ja_cliente||0)*jaS+bW*0.5+sW*5;
+    });
+    fila.sort(function(a,b){ return (b._score||0)-(a._score||0); });
+  }
+
   // seletor de vendedor: vendedor ve so a propria fila; admin escolhe.
   var selV=$("#selVend");
   if(u.role==="admin"){ selV.innerHTML='<option value="">Todos</option><option>Francisco</option><option>Matheus</option><option>Lorena</option>'; }
@@ -89,7 +115,7 @@ if(u){
     qy=qy.order("bucket",{ascending:true}).order("valor_ref",{ascending:false,nullsFirst:false}).limit(40);
     var r=await qy;
     if(r.error){ banner("Erro: "+r.error.message,"err"); $("#lista").innerHTML='<div class="empty">—</div>'; return; }
-    fila=r.data||[]; renderLista(); renderMetrics();
+    fila=r.data||[]; rankFila(); renderLista(); renderMetrics();
     $("#sub").textContent=new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})+(v?" · "+v:"");
   };
   function renderMetrics(){
@@ -177,7 +203,7 @@ if(u){
   });
   $("#selSeg").addEventListener("change",carregar);
   if(u.role==="admin") selV.addEventListener("change",carregar);
-  carregar();
+  (async function(){ try{ var p=await sb.from("va_parametros").select("chave,valor"); (p.data||[]).forEach(function(x){ PARAMS[x.chave]=x.valor; }); }catch(e){} carregar(); })();
 }
 </script>
 </body>

@@ -6,21 +6,29 @@
 <title>Parâmetros · Venda Ativa</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  .grp{margin-bottom:18px;}
+  .grp{margin-bottom:16px;}
   .grp h3{font-size:14px;font-weight:600;margin-bottom:4px;}
   .grp .d{font-size:12px;color:var(--muted);margin-bottom:12px;}
   .fields{display:flex;gap:16px;flex-wrap:wrap;}
   .fld{display:flex;flex-direction:column;gap:5px;}
   .fld label{font-size:12px;color:var(--muted);}
-  .fld input{width:120px;}
+  .fld input{width:110px;}
+  .tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .tab{font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--muted);}
+  .tab.on{border-color:var(--blue);color:var(--blue);background:rgba(88,166,255,.1);}
+  table.mtx{border-collapse:collapse;font-size:13px;margin-top:8px;}
+  table.mtx th,table.mtx td{padding:7px 10px;border-bottom:1px solid var(--border);text-align:center;}
+  table.mtx th:first-child,table.mtx td:first-child{text-align:left;color:var(--muted);}
+  table.mtx input{width:56px;text-align:center;}
   .bar{display:flex;gap:12px;align-items:center;margin-top:8px;}
   .ok{font-size:13px;color:var(--green);opacity:0;transition:opacity .2s;}.ok.on{opacity:1;}
+  .hint{font-size:11px;color:var(--muted2);margin-top:6px;}
 </style>
 </head>
 <body>
 <div class="va-content">
   <div class="va-h1">Parâmetros</div>
-  <div class="va-sub">A sala de comando. Aqui você define metas, pesos e regras — e o resto do sistema obedece.</div>
+  <div class="va-sub">A sala de comando. Aqui você define metas, pesos e regras por vendedor — e a fila obedece.</div>
   <div id="body"><div class="empty">Carregando…</div></div>
 </div>
 <script src="app.js"></script>
@@ -30,43 +38,103 @@ if(u){
   var sb=VA.sb, esc=VA.esc, $=function(s){return document.querySelector(s);};
   if(u.role!=="admin"){ $("#body").innerHTML='<div class="card">Esta página é só do Administrador.</div>'; }
   else {
-    var P={};
-    function num(id,val,w){ return '<div class="fld"><label>'+id[1]+'</label><input type="number" id="'+id[0]+'" value="'+val+'"'+(w?' style="width:'+w+'px"':'')+'></div>'; }
+    var VENDS=["Francisco","Matheus","Lorena"];
+    var SEGS=["Linha Box","Alicates","Grampos Industriais","Pinos","Pregos","Combos","Diversos"];
+    var vend="Francisco";
+    var M={meta:{},mix:{},rank:{},seg:{},glob:{}};
+    var DEF_MIX={recompra:40,reativar:30,lead:30};
+    var DEF_RANK={timing:40,valor:30,ja_cliente:30};
+
+    function num(x,d){ return (x==null||isNaN(x))?d:Number(x); }
+    // aceita formato por-vendedor {Francisco:{...}} OU formato antigo achatado {recompra:..}
+    function perVend(obj,flatKeys,def){
+      var out={};
+      VENDS.forEach(function(v){
+        var src=null;
+        if(obj && obj[v]) src=obj[v];                               // já é por vendedor
+        else if(obj && flatKeys.some(function(k){return obj[k]!=null;})) src=obj; // legado achatado
+        else src=def;
+        var o={}; flatKeys.forEach(function(k){ o[k]=num(src[k],def[k]); }); out[v]=o;
+      });
+      return out;
+    }
+    function perVendSeg(obj){
+      var out={};
+      VENDS.forEach(function(v){ var src=(obj&&obj[v])||{}; var o={}; SEGS.forEach(function(s){ o[s]=num(src[s],5); }); out[v]=o; });
+      return out;
+    }
+
     load();
     async function load(){
-      var r=await sb.from("va_parametros").select("*");
+      var r=await sb.from("va_parametros").select("chave,valor");
       if(r.error){ $("#body").innerHTML='<div class="card">Erro: '+r.error.message+'</div>'; return; }
-      (r.data||[]).forEach(function(row){ P[row.chave]=row.valor; });
+      var P={}; (r.data||[]).forEach(function(row){ P[row.chave]=row.valor; });
+      var md=P.meta_diaria||{};
+      M.meta={Francisco:num(md.Francisco,18),Matheus:num(md.Matheus,30),Lorena:num(md.Lorena,30)};
+      M.mix=perVend(P.mix_fila,["recompra","reativar","lead"],DEF_MIX);
+      M.rank=perVend(P.pesos_ranking,["timing","valor","ja_cliente"],DEF_RANK);
+      M.seg=perVendSeg(P.pesos_segmento);
+      M.glob={recompra_default_dias:num(P.recompra_default_dias,60),digital_tentativas:num(P.digital_tentativas,5),digital_dias:num(P.digital_dias,21)};
       render();
     }
-    function g(k,d){ return (P[k]==null?d:P[k]); }
+
+    window.trocaVend=function(v){ vend=v; render(); };
+    window.setMeta=function(val){ M.meta[vend]=num(parseFloat(val),0); };
+    window.setMix=function(k,val){ M.mix[vend][k]=num(parseFloat(val),0); };
+    window.setRank=function(k,val){ M.rank[vend][k]=num(parseFloat(val),0); };
+    window.setSeg=function(v,s,val){ M.seg[v][s]=num(parseFloat(val),0); };
+    window.setGlob=function(k,val){ M.glob[k]=num(parseFloat(val),0); };
+
+    function fld(label,id,val,oninput){ return '<div class="fld"><label>'+label+'</label><input type="number" value="'+val+'" oninput="'+oninput+'"></div>'; }
+
     function render(){
-      var md=g("meta_diaria",{}), mx=g("mix_fila",{}), pr=g("pesos_ranking",{});
-      $("#body").innerHTML=
-        '<div class="card grp"><h3>Meta de tarefas por dia</h3><div class="d">Quantos contatos por vendedor num dia. Desafio que tem fim — não é corrida.</div><div class="fields">'
-          +num(["m_fra","Francisco"],md.Francisco!=null?md.Francisco:18)+num(["m_mat","Matheus"],md.Matheus!=null?md.Matheus:30)+num(["m_lor","Lorena"],md.Lorena!=null?md.Lorena:30)+'</div></div>'
-        +'<div class="card grp"><h3>Mistura da fila do dia (%)</h3><div class="d">A proporção de cada balde na fila. Soma idealmente 100.</div><div class="fields">'
-          +num(["x_rec","Recompra"],mx.recompra!=null?mx.recompra:40)+num(["x_rea","Reativar"],mx.reativar!=null?mx.reativar:30)+num(["x_lea","Lead novo"],mx.lead!=null?mx.lead:30)+'</div></div>'
-        +'<div class="card grp"><h3>Pesos do ranking</h3><div class="d">O quanto cada quesito puxa a prioridade de quem ligar.</div><div class="fields">'
-          +num(["p_tim","Timing"],pr.timing!=null?pr.timing:40)+num(["p_val","Valor (R$)"],pr.valor!=null?pr.valor:30)+num(["p_cli","Já é cliente"],pr.ja_cliente!=null?pr.ja_cliente:15)+num(["p_reg","Regularidade"],pr.regularidade!=null?pr.regularidade:15)+'</div></div>'
-        +'<div class="card grp"><h3>Recompra e digital</h3><div class="d">Dias-base de recompra sem histórico; e quando soltar um lead pro digital.</div><div class="fields">'
-          +num(["r_dias","Recompra padrão (dias)"],g("recompra_default_dias",60),150)+num(["d_tent","Tentativas p/ digital"],g("digital_tentativas",5),150)+num(["d_dias","Janela digital (dias)"],g("digital_dias",21),150)+'</div></div>'
+      var tabs=VENDS.map(function(v){ return '<button class="tab '+(v===vend?"on":"")+'" onclick="trocaVend(\''+v+'\')">'+v+'</button>'; }).join("");
+      var mx=M.mix[vend], pr=M.rank[vend];
+      var perV=
+        '<div class="card grp"><h3>Meta de tarefas por dia · '+vend+'</h3><div class="d">Quantos contatos por dia. Desafio que tem fim — não é corrida.</div><div class="fields">'
+          +fld("Meta diária","",M.meta[vend],"setMeta(this.value)")+'</div></div>'
+        +'<div class="card grp"><h3>Mistura da fila · '+vend+'</h3><div class="d">O quanto cada balde puxa na fila deste vendedor (peso, não cota fixa).</div><div class="fields">'
+          +fld("Recompra","",mx.recompra,"setMix(\'recompra\',this.value)")
+          +fld("Reativar","",mx.reativar,"setMix(\'reativar\',this.value)")
+          +fld("Lead novo","",mx.lead,"setMix(\'lead\',this.value)")+'</div></div>'
+        +'<div class="card grp"><h3>Pesos do ranking · '+vend+'</h3><div class="d">O quanto cada quesito puxa a prioridade de quem ligar primeiro.</div><div class="fields">'
+          +fld("Timing","",pr.timing,"setRank(\'timing\',this.value)")
+          +fld("Valor (R$)","",pr.valor,"setRank(\'valor\',this.value)")
+          +fld("Já é cliente","",pr.ja_cliente,"setRank(\'ja_cliente\',this.value)")+'</div></div>';
+
+      var mtxHead='<tr><th>Segmento</th>'+VENDS.map(function(v){return '<th>'+v+'</th>';}).join("")+'</tr>';
+      var mtxRows=SEGS.map(function(s){
+        return '<tr><td>'+esc(s)+'</td>'+VENDS.map(function(v){
+          return '<td><input type="number" min="0" max="10" value="'+M.seg[v][s]+'" oninput="setSeg(\''+v+'\',\''+esc(s)+'\',this.value)"></td>';
+        }).join("")+'</tr>';
+      }).join("");
+      var matriz='<div class="card grp"><h3>Peso por segmento × vendedor</h3><div class="d">0 a 10. Quanto maior, mais alto aquele segmento sobe na fila do vendedor. Ex.: Alicates 9 na Lorena, Linha Box 9 no Matheus.</div>'
+        +'<table class="mtx"><thead>'+mtxHead+'</thead><tbody>'+mtxRows+'</tbody></table>'
+        +'<div class="hint">Vale para todos os vendedores ao mesmo tempo — edite a coluna de cada um.</div></div>';
+
+      var g=M.glob;
+      var global='<div class="card grp"><h3>Regras gerais (valem para todos)</h3><div class="d">Dias-base de recompra sem histórico; e quando soltar um lead pro digital.</div><div class="fields">'
+        +fld("Recompra padrão (dias)","",g.recompra_default_dias,"setGlob(\'recompra_default_dias\',this.value)")
+        +fld("Tentativas p/ digital","",g.digital_tentativas,"setGlob(\'digital_tentativas\',this.value)")
+        +fld("Janela digital (dias)","",g.digital_dias,"setGlob(\'digital_dias\',this.value)")+'</div></div>';
+
+      $("#body").innerHTML='<div class="tabs">'+tabs+'</div>'+perV+matriz+global
         +'<div class="bar"><button class="btn green" onclick="salvar()">Salvar parâmetros</button><span class="ok" id="ok">✓ salvo</span></div>';
     }
+
     window.salvar=async function(){
-      var v=function(id){ return parseFloat($("#"+id).value)||0; };
+      var ts=new Date().toISOString();
       var rows=[
-        {chave:"meta_diaria", valor:{Francisco:v("m_fra"),Matheus:v("m_mat"),Lorena:v("m_lor")}},
-        {chave:"mix_fila", valor:{recompra:v("x_rec"),reativar:v("x_rea"),lead:v("x_lea")}},
-        {chave:"pesos_ranking", valor:{timing:v("p_tim"),valor:v("p_val"),ja_cliente:v("p_cli"),regularidade:v("p_reg")}},
-        {chave:"recompra_default_dias", valor:v("r_dias")},
-        {chave:"digital_tentativas", valor:v("d_tent")},
-        {chave:"digital_dias", valor:v("d_dias")}
+        {chave:"meta_diaria",valor:M.meta,atualizado_em:ts},
+        {chave:"mix_fila",valor:M.mix,atualizado_em:ts},
+        {chave:"pesos_ranking",valor:M.rank,atualizado_em:ts},
+        {chave:"pesos_segmento",valor:M.seg,atualizado_em:ts},
+        {chave:"recompra_default_dias",valor:M.glob.recompra_default_dias,atualizado_em:ts},
+        {chave:"digital_tentativas",valor:M.glob.digital_tentativas,atualizado_em:ts},
+        {chave:"digital_dias",valor:M.glob.digital_dias,atualizado_em:ts}
       ];
-      for(var i=0;i<rows.length;i++){
-        var r=await sb.from("va_parametros").update({valor:rows[i].valor, atualizado_em:new Date().toISOString()}).eq("chave",rows[i].chave);
-        if(r.error){ alert("Erro ao salvar "+rows[i].chave+": "+r.error.message); return; }
-      }
+      var r=await sb.from("va_parametros").upsert(rows,{onConflict:"chave"});
+      if(r.error){ alert("Erro ao salvar: "+r.error.message); return; }
       var o=$("#ok"); o.classList.add("on"); setTimeout(function(){o.classList.remove("on");},1600);
     };
   }
