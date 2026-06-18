@@ -30,12 +30,25 @@ if(u){
   if(u.role!=="admin"){ $("#body").innerHTML='<div class="card">Esta página é só do Administrador.</div>'; }
   else { carregar(); }
 
+  // Busca paginada: a API do Supabase corta em 1000 linhas/requisição
+  async function fetchAll(make){
+    var all=[], from=0, size=1000;
+    while(true){
+      var r=await make().range(from,from+size-1);
+      if(r.error) return {error:r.error};
+      var d=r.data||[]; all=all.concat(d);
+      if(d.length<size) break;
+      from+=size;
+    }
+    return {data:all};
+  }
+
   async function carregar(){
     var hoje=new Date(); var ini=new Date(hoje.getFullYear(),hoje.getMonth(),1).toISOString();
     $("#sub").textContent="Desempenho do setor · "+hoje.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
-    var cs=await sb.from("va_cliente_status").select("vendedor_dono,status,segmento_primario,pool").limit(5000);
-    var fl=await sb.from("vw_fila").select("vendedor_alvo,bucket").lt("bucket",9).limit(5000);
-    var it=await sb.from("va_interacoes").select("vendedor,resultado,data").gte("data",ini).limit(10000);
+    var cs=await fetchAll(function(){ return sb.from("va_cliente_status").select("vendedor_dono,status,segmento_primario,pool"); });
+    var fl=await fetchAll(function(){ return sb.from("vw_fila").select("vendedor_alvo,bucket").lt("bucket",9); });
+    var it=await fetchAll(function(){ return sb.from("va_interacoes").select("vendedor,resultado,data").gte("data",ini); });
     if(cs.error){ $("#body").innerHTML='<div class="card">Erro: '+cs.error.message+'</div>'; return; }
     var C=cs.data||[], F=(fl.data||[]), I=(it.data||[]);
 
