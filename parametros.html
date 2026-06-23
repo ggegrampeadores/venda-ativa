@@ -93,7 +93,7 @@ if(u){
       var perV=
         '<div class="card grp"><h3>Meta de tarefas por dia · '+vend+'</h3><div class="d">Quantos contatos por dia. Desafio que tem fim — não é corrida.</div><div class="fields">'
           +fld("Meta diária","",M.meta[vend],"setMeta(this.value)")+'</div></div>'
-        +'<div class="card grp"><h3>Mistura da fila · '+vend+'</h3><div class="d">O quanto cada balde puxa na fila deste vendedor (peso, não cota fixa).</div><div class="fields">'
+        +'<div class="card grp"><h3>Mistura da fila · '+vend+'</h3><div class="d">Cota de cada balde na fila do dia (sobre a meta diária). Ex.: 40/40/20 = 40% recompra, 40% reativar, 20% lead. Se faltar de um, a sobra vai pros outros.</div><div class="fields">'
           +fld("Recompra","",mx.recompra,"setMix(\'recompra\',this.value)")
           +fld("Reativar","",mx.reativar,"setMix(\'reativar\',this.value)")
           +fld("Lead novo","",mx.lead,"setMix(\'lead\',this.value)")+'</div></div>'

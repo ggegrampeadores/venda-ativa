@@ -72,7 +72,7 @@
 var u = VA.montar("contatos.html");
 if(u){
   var sb=VA.sb, brl=VA.brl, waNum=VA.waNum, esc=VA.esc;
-  var BK={0:["Compromisso","bk0"],1:["Recompra","bk1"],2:["Reativar","bk2"],3:["Lead novo","bk3"],4:["Orçamento","bk4"],5:["Toow ativo","bk5"],6:["Toow inativo","bk6"]};
+  var BK={0:["Compromisso","bk0"],1:["Recompra","bk1"],2:["Reativar","bk2"],3:["Lead novo","bk3"],4:["Prospect","bk4"],5:["Toow ativo","bk5"],6:["Toow inativo","bk6"]};
   var fila=[], sel=null, currentFicha=null;
   var $=function(s){return document.querySelector(s);};
   function banner(m,t){ $("#banner").innerHTML = m?'<div class="banner '+t+'">'+m+'</div>':""; }
@@ -84,24 +84,76 @@ if(u){
     if(obj&&flatKeys.some(function(k){return obj[k]!=null;})) return obj;
     return def;
   }
-  function rankFila(){
-    var V=(u.role==="admin")?selV.value:u.nome;
-    if(!V) return; // "Todos": mantém ordem por balde + valor
-    var rank=pvObj(PARAMS.pesos_ranking,V,["timing","valor","ja_cliente"],{timing:40,valor:30,ja_cliente:30});
-    var mix=pvObj(PARAMS.mix_fila,V,["recompra","reativar","lead"],{recompra:40,reativar:30,lead:30});
+  function num(x,d){ return (x==null||isNaN(x))?d:Number(x); }
+  // ORDEM DOS CRITÉRIOS: 1º Meta (tamanho) → 2º Mistura (composição, vira cota em montarFila)
+  // → 3º Ranking (timing/valor/já-cliente, ABAIXO) → 4º Segmento (último, nudge mais leve: sW*2).
+  // A Mistura NÃO entra na pontuação — ela é cota. Aqui só ordenamos DENTRO de cada categoria.
+  function pontuar(rows,V){
+    var rank=pvObj(PARAMS.pesos_ranking,V,["timing","valor","ja_cliente"],{timing:40,valor:30,ja_cliente:15});
     var seg=(PARAMS.pesos_segmento&&PARAMS.pesos_segmento[V])||{};
-    var maxVal=1; fila.forEach(function(f){ if((f.valor_ref||0)>maxVal)maxVal=f.valor_ref; });
-    fila.forEach(function(f){
-      if(f.bucket===0){ f._score=1e9; return; }      // compromissos do dia: topo fixo
+    var maxVal=1; rows.forEach(function(f){ if((f.valor_ref||0)>maxVal)maxVal=f.valor_ref; });
+    rows.forEach(function(f){
       var valorS=(f.valor_ref||0)/maxVal;
       var timingS=Math.max(0,Math.min(1,((f.dias||0)+30)/60));
       var jaS=(f.status==="cliente")?1:0;
-      var bW=f.bucket===1?(mix.recompra||0):f.bucket===2?(mix.reativar||0):(mix.lead||0);
-      var sW=seg[f.segmento_primario]||0;
-      f._score=(rank.timing||0)*timingS+(rank.valor||0)*valorS+(rank.ja_cliente||0)*jaS+bW*0.5+sW*5;
+      var sW=seg[f.segmento_primario]||0;        // segmento = critério final, peso menor que o ranking
+      f._score=(rank.timing||0)*timingS+(rank.valor||0)*valorS+(rank.ja_cliente||0)*jaS+sW*2;
     });
-    fila.sort(function(a,b){ return (b._score||0)-(a._score||0); });
   }
+  // distribui R vagas entre recompra/reativar/lead conforme a Mistura,
+  // respeitando quantos existem; sobra de uma categoria curta vai pras outras.
+  function distribuir(R,mix,avail){
+    var cats=["recompra","reativar","lead"], w={}, tot=0;
+    cats.forEach(function(c){ w[c]=Math.max(0,mix[c]||0); tot+=w[c]; });
+    if(tot<=0){ cats.forEach(function(c){ w[c]=1; }); tot=3; }
+    var alloc={}, rema={}, used=0;
+    cats.forEach(function(c){ var ideal=R*w[c]/tot; var base=Math.min(avail[c],Math.floor(ideal)); alloc[c]=base; rema[c]=ideal-Math.floor(ideal); used+=base; });
+    var left=R-used, guard=0;
+    while(left>0 && guard<5000){
+      var order=cats.slice().sort(function(a,b){ return rema[b]-rema[a]; });
+      var moved=false;
+      for(var i=0;i<order.length && left>0;i++){ var c=order[i]; if(alloc[c]<avail[c]){ alloc[c]++; left--; rema[c]=0; moved=true; } }
+      if(!moved) break; guard++;
+    }
+    return alloc;
+  }
+  // intercala as listas (peso por tamanho) pra dar variedade de cima a baixo
+  function intercalar(parts){
+    var cats=Object.keys(parts), idx={}, credit={}, weights={}, wsum=0, total=0;
+    cats.forEach(function(c){ idx[c]=0; credit[c]=0; weights[c]=parts[c].length; wsum+=weights[c]; total+=parts[c].length; });
+    var out=[];
+    while(out.length<total){
+      var best=null;
+      cats.forEach(function(c){ if(idx[c]<parts[c].length){ credit[c]+=weights[c]; if(best===null||credit[c]>credit[best]) best=c; } });
+      if(best===null) break;
+      out.push(parts[best][idx[best]++]); credit[best]-=wsum;
+    }
+    return out;
+  }
+  // monta a fila final: compromissos no topo + cota da Mistura sobre a meta diária.
+  // Categorias da Mistura: Recompra=balde 1; Reativar=balde 2 (ex-clientes) + balde 4 (prospects);
+  // Lead=balde 3. Toow (5/6) NÃO entra aqui — fica nos filtros da listagem.
+  function montarFila(pool,V){
+    pontuar(pool,V);
+    var byB={0:[],1:[],2:[],3:[],4:[]};
+    pool.forEach(function(f){ if(byB[f.bucket]) byB[f.bucket].push(f); });
+    var recompra=byB[1].slice().sort(byScore);
+    var reativar=byB[2].concat(byB[4]).sort(byScore);   // antigos + prospects
+    var lead=byB[3].slice().sort(byScore);
+    var comp=byB[0].slice().sort(byScore);
+    if(!V){ // admin "Todos": sem cota — compromissos no topo + resto por score, teto 60
+      var resto=recompra.concat(reativar,lead).sort(byScore);
+      return comp.concat(resto).slice(0,60);
+    }
+    var meta=num((PARAMS.meta_diaria&&PARAMS.meta_diaria[V]),30);
+    var mix=pvObj(PARAMS.mix_fila,V,["recompra","reativar","lead"],{recompra:40,reativar:30,lead:30});
+    var slots=Math.max(0,meta-comp.length);
+    var avail={recompra:recompra.length,reativar:reativar.length,lead:lead.length};
+    var alloc=distribuir(slots,mix,avail);
+    var parts={recompra:recompra.slice(0,alloc.recompra),reativar:reativar.slice(0,alloc.reativar),lead:lead.slice(0,alloc.lead)};
+    return comp.concat(intercalar(parts));
+  }
+  function byScore(a,c){ return (c._score||0)-(a._score||0); }
 
   // seletor de vendedor: vendedor ve so a propria fila; admin escolhe.
   var selV=$("#selVend");
@@ -111,13 +163,15 @@ if(u){
   window.carregar=async function(){
     banner(""); $("#lista").innerHTML='<div class="empty">Carregando…</div>';
     var v=selV.value, seg=$("#selSeg").value;
-    var qy=sb.from("vw_fila").select("*").lt("bucket",9);
+    // baldes da fila do dia: compromisso(0), recompra(1), reativar(2), lead(3), prospect(4).
+    // Reativar = balde 2 + balde 4. Toow(5/6) fica de fora — acessível pela listagem.
+    var qy=sb.from("vw_fila").select("*").in("bucket",[0,1,2,3,4]);
     if(v) qy=qy.eq("vendedor_alvo",v);
     if(seg) qy=qy.eq("segmento_primario",seg);
-    qy=qy.order("bucket",{ascending:true}).order("valor_ref",{ascending:false,nullsFirst:false}).limit(40);
+    qy=qy.order("valor_ref",{ascending:false,nullsFirst:false}).limit(1000);
     var r=await qy;
     if(r.error){ banner("Erro: "+r.error.message,"err"); $("#lista").innerHTML='<div class="empty">—</div>'; return; }
-    fila=r.data||[]; rankFila(); renderLista(); renderMetrics();
+    fila=montarFila(r.data||[],v); renderLista(); renderMetrics();
     $("#sub").textContent=new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})+(v?" · "+v:"");
   };
   function renderMetrics(){
@@ -126,7 +180,7 @@ if(u){
       '<div class="metric"><div class="lbl">Na fila</div><div class="val">'+fila.length+'</div></div>'
       +'<div class="metric"><div class="lbl">Compromissos</div><div class="val" style="color:var(--red)">'+c(0)+'</div></div>'
       +'<div class="metric"><div class="lbl">Recompra na hora</div><div class="val" style="color:var(--green)">'+c(1)+'</div></div>'
-      +'<div class="metric"><div class="lbl">Reativar / Leads</div><div class="val">'+c(2)+' / '+c(3)+'</div></div>';
+      +'<div class="metric"><div class="lbl">Reativar / Leads</div><div class="val">'+(c(2)+c(4))+' / '+c(3)+'</div></div>';
   }
   function renderLista(){
     if(!fila.length){ $("#lista").innerHTML='<div class="empty">Nada na fila para este filtro.</div>'; return; }

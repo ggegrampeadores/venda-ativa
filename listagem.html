@@ -62,8 +62,8 @@ if(u){
       if(st) qy=qy.eq("status",st);
       if(og) qy=qy.eq("origem",og);
       if(pool==="__ORC__") qy=qy.eq("orcamento_sem_retorno",true);
-      else if(pool==="__TWA__") qy=qy.eq("toow_status","ativo");
-      else if(pool==="__TWI__") qy=qy.eq("toow_status","inativo");
+      else if(pool==="__TWA__") qy=qy.eq("toow_status","ativo").or("celular.not.is.null,telefone.not.is.null,email.not.is.null");
+      else if(pool==="__TWI__") qy=qy.eq("toow_status","inativo").or("celular.not.is.null,telefone.not.is.null,email.not.is.null");
       else if(pool) qy=qy.eq("pool",pool);
       if(vd==="__GGE__") qy=qy.is("vendedor_dono",null);
       else if(vd==="__MINE__") qy=qy.eq("vendedor_dono",u.nome);
