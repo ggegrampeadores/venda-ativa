@@ -28,7 +28,7 @@
     <select id="fOrig"><option value="">Origem</option><option value="mercadolivre">Mercado Livre / Segunda Venda</option><option value="bling_b2b">Bling</option><option value="manual">Nova (Neco)</option></select>
     <select id="fUlt"><option value="">Último contato</option><option value="1">Sem contato +1 mês</option><option value="3">Sem contato +3 meses</option><option value="6">Sem contato +6 meses</option><option value="12">Sem contato +12 meses</option></select>
     <select id="fVend"></select>
-    <select id="fPool"><option value="">Lista</option><option value="carteira_ativa">Carteira ativa</option><option value="ex_francisco">Ex-Francisco</option><option value="reativacao">Reativação</option><option value="segunda_venda_ml">Segunda venda (ML)</option><option value="__ORC__">Orçamento sem retorno (60+ dias)</option></select>
+    <select id="fPool"><option value="">Lista</option><option value="carteira_ativa">Carteira ativa</option><option value="ex_francisco">Ex-Francisco</option><option value="reativacao">Reativação</option><option value="segunda_venda_ml">Segunda venda (ML)</option><option value="__TWA__">Toow Ativos (12m)</option><option value="__TWI__">Toow Inativos</option><option value="__ORC__">Orçamento sem retorno (60+ dias)</option></select>
     <input id="q" type="text" placeholder="Buscar empresa…" style="width:200px;">
     <button class="btn" onclick="carregar()">Aplicar</button>
     <button class="btn green" onclick="exportar()">Exportar CSV</button>
@@ -62,6 +62,8 @@ if(u){
       if(st) qy=qy.eq("status",st);
       if(og) qy=qy.eq("origem",og);
       if(pool==="__ORC__") qy=qy.eq("orcamento_sem_retorno",true);
+      else if(pool==="__TWA__") qy=qy.eq("toow_status","ativo");
+      else if(pool==="__TWI__") qy=qy.eq("toow_status","inativo");
       else if(pool) qy=qy.eq("pool",pool);
       if(vd==="__GGE__") qy=qy.is("vendedor_dono",null);
       else if(vd==="__MINE__") qy=qy.eq("vendedor_dono",u.nome);

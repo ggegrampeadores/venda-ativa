@@ -18,6 +18,7 @@
   .bk0{background:rgba(248,81,73,.18);color:#ff7b72;}.bk1{background:rgba(63,185,80,.15);color:#56d364;}
   .bk2{background:rgba(219,109,75,.18);color:#f0a48a;}.bk3{background:rgba(88,166,255,.15);color:#79c0ff;}
   .bk4{background:rgba(163,113,247,.18);color:#b392f0;}
+  .bk5{background:rgba(210,153,34,.18);color:#e3b341;}.bk6{background:rgba(139,148,158,.18);color:#a9b1ba;}
   .wa{color:var(--green);font-size:15px;}
   .fhead{display:flex;align-items:center;gap:11px;flex-wrap:wrap;}
   .avatar{width:40px;height:40px;border-radius:50%;background:rgba(88,166,255,.18);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;}
@@ -71,7 +72,7 @@
 var u = VA.montar("contatos.html");
 if(u){
   var sb=VA.sb, brl=VA.brl, waNum=VA.waNum, esc=VA.esc;
-  var BK={0:["Compromisso","bk0"],1:["Recompra","bk1"],2:["Reativar","bk2"],3:["Lead novo","bk3"],4:["Orçamento","bk4"]};
+  var BK={0:["Compromisso","bk0"],1:["Recompra","bk1"],2:["Reativar","bk2"],3:["Lead novo","bk3"],4:["Orçamento","bk4"],5:["Toow ativo","bk5"],6:["Toow inativo","bk6"]};
   var fila=[], sel=null, currentFicha=null;
   var $=function(s){return document.querySelector(s);};
   function banner(m,t){ $("#banner").innerHTML = m?'<div class="banner '+t+'">'+m+'</div>':""; }
