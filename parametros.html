@@ -41,9 +41,10 @@ if(u){
     var VENDS=["Francisco","Matheus","Lorena"];
     var SEGS=["Linha Box","Alicates","Grampos Industriais","Pinos","Pregos","Combos","Diversos"];
     var vend="Francisco";
-    var M={meta:{},mix:{},rank:{},seg:{},glob:{}};
+    var M={meta:{},mix:{},rank:{},seg:{},pisos:{},glob:{}};
     var DEF_MIX={recompra:40,reativar:30,lead:30};
     var DEF_RANK={timing:40,valor:30,ja_cliente:30};
+    var DEF_PISO={recompra:1000,reativar:1000,lead:1000};
 
     function num(x,d){ return (x==null||isNaN(x))?d:Number(x); }
     // aceita formato por-vendedor {Francisco:{...}} OU formato antigo achatado {recompra:..}
@@ -73,8 +74,9 @@ if(u){
       M.meta={Francisco:num(md.Francisco,18),Matheus:num(md.Matheus,30),Lorena:num(md.Lorena,30)};
       M.mix=perVend(P.mix_fila,["recompra","reativar","lead"],DEF_MIX);
       M.rank=perVend(P.pesos_ranking,["timing","valor","ja_cliente"],DEF_RANK);
+      M.pisos=perVend(P.pisos_valor,["recompra","reativar","lead"],DEF_PISO);
       M.seg=perVendSeg(P.pesos_segmento);
-      M.glob={recompra_default_dias:num(P.recompra_default_dias,60),digital_tentativas:num(P.digital_tentativas,5),digital_dias:num(P.digital_dias,21)};
+      M.glob={recompra_default_dias:num(P.recompra_default_dias,60),digital_tentativas:num(P.digital_tentativas,5),digital_dias:num(P.digital_dias,21),agora_nao_dias:num(P.agora_nao_dias,3)};
       render();
     }
 
@@ -82,6 +84,7 @@ if(u){
     window.setMeta=function(val){ M.meta[vend]=num(parseFloat(val),0); };
     window.setMix=function(k,val){ M.mix[vend][k]=num(parseFloat(val),0); };
     window.setRank=function(k,val){ M.rank[vend][k]=num(parseFloat(val),0); };
+    window.setPiso=function(k,val){ M.pisos[vend][k]=num(parseFloat(val),0); };
     window.setSeg=function(v,s,val){ M.seg[v][s]=num(parseFloat(val),0); };
     window.setGlob=function(k,val){ M.glob[k]=num(parseFloat(val),0); };
 
@@ -89,7 +92,7 @@ if(u){
 
     function render(){
       var tabs=VENDS.map(function(v){ return '<button class="tab '+(v===vend?"on":"")+'" onclick="trocaVend(\''+v+'\')">'+v+'</button>'; }).join("");
-      var mx=M.mix[vend], pr=M.rank[vend];
+      var mx=M.mix[vend], pr=M.rank[vend], ps=M.pisos[vend];
       var perV=
         '<div class="card grp"><h3>Meta de tarefas por dia · '+vend+'</h3><div class="d">Quantos contatos por dia. Desafio que tem fim — não é corrida.</div><div class="fields">'
           +fld("Meta diária","",M.meta[vend],"setMeta(this.value)")+'</div></div>'
@@ -100,7 +103,11 @@ if(u){
         +'<div class="card grp"><h3>Pesos do ranking · '+vend+'</h3><div class="d">O quanto cada quesito puxa a prioridade de quem ligar primeiro.</div><div class="fields">'
           +fld("Timing","",pr.timing,"setRank(\'timing\',this.value)")
           +fld("Valor (R$)","",pr.valor,"setRank(\'valor\',this.value)")
-          +fld("Já é cliente","",pr.ja_cliente,"setRank(\'ja_cliente\',this.value)")+'</div></div>';
+          +fld("Já é cliente","",pr.ja_cliente,"setRank(\'ja_cliente\',this.value)")+'</div></div>'
+        +'<div class="card grp"><h3>Piso de valor (R$) · '+vend+'</h3><div class="d">Abaixo deste valor o cliente NÃO entra na fila do dia (continua na listagem). Base: faturamento 12m p/ carteira ativa; total histórico p/ leads e reativação. Compromisso marcado pelo vendedor é sempre isento.</div><div class="fields">'
+          +fld("Recompra","",ps.recompra,"setPiso(\'recompra\',this.value)")
+          +fld("Reativar","",ps.reativar,"setPiso(\'reativar\',this.value)")
+          +fld("Lead novo","",ps.lead,"setPiso(\'lead\',this.value)")+'</div></div>';
 
       var mtxHead='<tr><th>Segmento</th>'+VENDS.map(function(v){return '<th>'+v+'</th>';}).join("")+'</tr>';
       var mtxRows=SEGS.map(function(s){
@@ -113,10 +120,11 @@ if(u){
         +'<div class="hint">Vale para todos os vendedores ao mesmo tempo — edite a coluna de cada um.</div></div>';
 
       var g=M.glob;
-      var global='<div class="card grp"><h3>Regras gerais (valem para todos)</h3><div class="d">Dias-base de recompra sem histórico; e quando soltar um lead pro digital.</div><div class="fields">'
+      var global='<div class="card grp"><h3>Regras gerais (valem para todos)</h3><div class="d">Dias-base de recompra sem histórico; quando soltar um lead pro digital; e por quantos dias um "Agora não" tira o cliente da fila.</div><div class="fields">'
         +fld("Recompra padrão (dias)","",g.recompra_default_dias,"setGlob(\'recompra_default_dias\',this.value)")
         +fld("Tentativas p/ digital","",g.digital_tentativas,"setGlob(\'digital_tentativas\',this.value)")
-        +fld("Janela digital (dias)","",g.digital_dias,"setGlob(\'digital_dias\',this.value)")+'</div></div>';
+        +fld("Janela digital (dias)","",g.digital_dias,"setGlob(\'digital_dias\',this.value)")
+        +fld("Agora não (dias)","",g.agora_nao_dias,"setGlob(\'agora_nao_dias\',this.value)")+'</div></div>';
 
       $("#body").innerHTML='<div class="tabs">'+tabs+'</div>'+perV+matriz+global
         +'<div class="bar"><button class="btn green" onclick="salvar()">Salvar parâmetros</button><span class="ok" id="ok">✓ salvo</span></div>';
@@ -128,10 +136,12 @@ if(u){
         {chave:"meta_diaria",valor:M.meta,atualizado_em:ts},
         {chave:"mix_fila",valor:M.mix,atualizado_em:ts},
         {chave:"pesos_ranking",valor:M.rank,atualizado_em:ts},
+        {chave:"pisos_valor",valor:M.pisos,atualizado_em:ts},
         {chave:"pesos_segmento",valor:M.seg,atualizado_em:ts},
         {chave:"recompra_default_dias",valor:M.glob.recompra_default_dias,atualizado_em:ts},
         {chave:"digital_tentativas",valor:M.glob.digital_tentativas,atualizado_em:ts},
-        {chave:"digital_dias",valor:M.glob.digital_dias,atualizado_em:ts}
+        {chave:"digital_dias",valor:M.glob.digital_dias,atualizado_em:ts},
+        {chave:"agora_nao_dias",valor:M.glob.agora_nao_dias,atualizado_em:ts}
       ];
       var r=await sb.from("va_parametros").upsert(rows,{onConflict:"chave"});
       if(r.error){ alert("Erro ao salvar: "+r.error.message); return; }
