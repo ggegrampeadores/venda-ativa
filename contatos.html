@@ -22,7 +22,15 @@
   .bk5{background:rgba(210,153,34,.18);color:#e3b341;}.bk6{background:rgba(139,148,158,.18);color:#a9b1ba;}
   .wa{color:var(--green);font-size:15px;}
   .skip{font-size:11px;padding:4px 9px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted2);white-space:nowrap;}
-  .skip:hover{border-color:var(--red);color:#ff7b72;}
+  .skip:hover{border-color:#d29922;color:#e3b341;}
+  .mopt{display:block;width:100%;text-align:left;font-size:13px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);margin-bottom:7px;cursor:pointer;}
+  .mopt:hover{border-color:var(--blue);}
+  .mopt .d{font-size:11px;color:var(--muted);margin-top:2px;}
+  .pop{position:fixed;z-index:70;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px;width:264px;box-shadow:0 8px 24px rgba(1,4,9,.6);}
+  .pop .mopt{margin-bottom:5px;padding:8px 10px;}
+  .sextaB{background:rgba(88,166,255,.10);border:1px solid rgba(88,166,255,.35);border-radius:10px;padding:11px 14px;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .sextaB a{color:var(--blue);font-weight:600;text-decoration:underline;}
+  .sextaB .x{margin-left:auto;background:none;border:none;color:var(--muted2);font-size:16px;}
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px 16px;font-size:13px;color:var(--text);box-shadow:0 8px 24px rgba(1,4,9,.6);opacity:0;pointer-events:none;transition:opacity .2s;z-index:60;}
   .toast.on{opacity:1;pointer-events:auto;}
   .toast button{margin-left:10px;background:none;border:none;color:var(--blue);text-decoration:underline;font-size:13px;padding:0;}
@@ -62,6 +70,7 @@
     <button class="btn" onclick="carregar()">Atualizar</button>
   </div>
   <div id="banner"></div>
+  <div id="sexta"></div>
   <div class="mrow" id="metrics"></div>
   <div class="grid">
     <div class="card"><div id="lista"><div class="empty">—</div></div></div>
@@ -86,6 +95,14 @@ if(u){
   // META = sugestões-alvo do dia; FEITAS = contatos reais já registrados hoje.
   var POOL={comp:[],recompra:[],reativar:[],lead:[]}, PTR={recompra:0,reativar:0,lead:0};
   var META=30, FEITAS=0, SNOOZE_DIAS=3;
+  // RECUSA: vendedor recusa a sugestão e ensina o motivo. Janelas por motivo (dias fora da fila):
+  // ticket_baixo=90, timing_errado=15, outro=30, segmento_ruim_hoje=só hoje, nao_quero_lead=DEFINITIVO.
+  // Aprendizado imediato no ranking: ticket_baixo penaliza a faixa de valor recusada (mesma categoria);
+  // segmento_ruim_hoje penaliza o segmento no resto do dia. Penalidade é SOFT (score), o piso segue HARD.
+  var RECUSA_DIAS={ticket_baixo:90,timing_errado:15,outro:30};
+  var PEN_TICKET=25, PEN_SEG=20;
+  var REC={excl:{},segHoje:{},ticketMax:{recompra:0,reativar:0,lead:0}};
+  var MOTIVOS={ticket_baixo:"Ticket baixo",nao_quero_lead:"Não quero lead",timing_errado:"Timing errado",segmento_ruim_hoje:"Segmento ruim para hoje",outro:"Outro motivo"};
   var $=function(s){return document.querySelector(s);};
   function banner(m,t){ $("#banner").innerHTML = m?'<div class="banner '+t+'">'+m+'</div>':""; }
 
@@ -115,6 +132,7 @@ if(u){
       var jaS=(f.status==="cliente")?1:0;
       var sW=seg[f.segmento_primario]||0;        // segmento = critério final, peso menor que o ranking
       f._score=(rank.timing||0)*timingS+(rank.valor||0)*valorS+(rank.ja_cliente||0)*jaS+sW*2;
+      if(REC.segHoje[f.segmento_primario]) f._score-=PEN_SEG;   // recusa "segmento ruim para hoje": segmento desce no dia
     });
   }
   // distribui R vagas entre recompra/reativar/lead conforme a Mistura,
@@ -158,9 +176,11 @@ if(u){
     // PISO DURO de valor por categoria (va_parametros.pisos_valor, por vendedor).
     // Abaixo do piso NÃO entra na fila do dia (segue na listagem). Compromisso (balde 0) é isento.
     var piso=pvObj(PARAMS.pisos_valor,V,["recompra","reativar","lead"],{recompra:1000,reativar:1000,lead:1000});
-    POOL.recompra=acima(byB[1],piso.recompra).sort(byScore);
-    POOL.reativar=acima(byB[2].concat(byB[4]),piso.reativar).sort(byScore);   // antigos + prospects
-    POOL.lead=acima(byB[3],piso.lead).sort(byScore);
+    // Aprendizado de "ticket baixo": abaixo do maior valor recusado da categoria, o score cai (soft — piso segue hard).
+    function penalTicket(arr,cat){ var T=REC.ticketMax[cat]||0; if(T>0) arr.forEach(function(f){ if((f.valor_ref||0)<=T) f._score-=PEN_TICKET; }); return arr; }
+    POOL.recompra=penalTicket(acima(byB[1],piso.recompra),"recompra").sort(byScore);
+    POOL.reativar=penalTicket(acima(byB[2].concat(byB[4]),piso.reativar),"reativar").sort(byScore);   // antigos + prospects
+    POOL.lead=penalTicket(acima(byB[3],piso.lead),"lead").sort(byScore);
     POOL.comp=byB[0].slice().sort(byScore);   // compromissos: sem piso
     PTR={recompra:0,reativar:0,lead:0};
     if(!V){ // admin "Todos": sem cota — compromissos no topo + resto por score, teto 60
@@ -190,7 +210,7 @@ if(u){
   function removeReplace(doc,repor){
     var i=idxOf(doc); if(i<0) return;
     var cat=categoria(fila[i]); fila.splice(i,1);
-    if(repor){ var r=nextRepl(cat==="comp"?null:cat); if(r) fila.push(r); }
+    if(repor){ var r=nextRepl(cat==="comp"?null:cat); if(r){ fila.push(r); var vv=(u.role==="admin"?selV.value:u.nome); if(vv) logFila(vv,[r]); } }
     if(sel===doc){ sel=null; $("#ficha").style.display="none"; $("#fichaVazia").style.display="block"; }
     renderLista(); renderMetrics();
   }
@@ -213,22 +233,67 @@ if(u){
     if(r.error){ banner("Erro: "+r.error.message,"err"); $("#lista").innerHTML='<div class="empty">—</div>'; return; }
     var rows=r.data||[];
     SNOOZE_DIAS=num(PARAMS.agora_nao_dias,3); FEITAS=0;
+    REC={excl:{},segHoje:{},ticketMax:{recompra:0,reativar:0,lead:0}};
     if(v){
       var snz=await fetchAdiados(v); FEITAS=await fetchFeitas(v);
       rows=rows.filter(function(f){ return !snz[f.documento]; });   // tira adiados ("agora não") da janela
+      await aplicarRecusas(v,rows);                                  // exclusões + aprendizado (REC)
+      rows=rows.filter(function(f){ return !REC.excl[f.documento]; });
     }
     fila=montarFila(rows,v); renderLista(); renderMetrics();
+    if(v) logFila(v,fila);   // registra quem a fila PROPÔS hoje (funil do relatório)
     $("#sub").textContent=new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})+(v?" · "+v:"");
   };
+  // Log das sugestões do dia (1x por cliente/vendedor/dia) — alimenta a coluna "Propostos" do relatório.
+  function logFila(vend,items){
+    if(!vend||!items||!items.length) return;
+    var dia=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+    var rows=items.map(function(f){ return {documento:f.documento,vendedor:vend,categoria:categoria(f),bucket:f.bucket,dia:dia}; });
+    sb.from("va_fila_log").upsert(rows,{onConflict:"documento,vendedor,dia",ignoreDuplicates:true}).then(function(){});
+  }
+  // Banner de sexta à tarde (13h–17h): convite para gerar o relatório da semana.
+  (function(){
+    var d=new Date();
+    if(d.getDay()===5 && d.getHours()>=13 && d.getHours()<17 && !sessionStorage.getItem("va_sexta_ok")){
+      $("#sexta").innerHTML='<div class="sextaB">📋 Sexta-feira — fechamento da semana! Que tal gerar seu relatório agora? '
+        +'<a href="relatorios.html">Gerar relatório</a>'
+        +'<button class="x" title="dispensar" onclick="this.parentNode.remove();sessionStorage.setItem(\'va_sexta_ok\',\'1\')">×</button></div>';
+    }
+  })();
   function inicioDoDia(){ var d=new Date(); d.setHours(0,0,0,0); return d.toISOString(); }
   async function fetchFeitas(vend){
     var r=await sb.from("va_interacoes").select("documento,resultado,data").eq("vendedor",vend).gte("data",inicioDoDia());
-    var s={}; (r.data||[]).forEach(function(x){ if(x.resultado!=="agora_nao") s[x.documento]=1; }); return Object.keys(s).length;
+    var s={}; (r.data||[]).forEach(function(x){ if(x.resultado!=="agora_nao"&&x.resultado!=="recusado") s[x.documento]=1; }); return Object.keys(s).length;
   }
   async function fetchAdiados(vend){
     var since=new Date(); since.setDate(since.getDate()-SNOOZE_DIAS);
     var r=await sb.from("va_interacoes").select("documento,data").eq("vendedor",vend).eq("resultado","agora_nao").gte("data",since.toISOString());
     var s={}; (r.data||[]).forEach(function(x){ s[x.documento]=1; }); return s;
+  }
+  // Recusas do vendedor: janela de 90d cobre todos os motivos temporários; nao_quero_lead vem sem limite de data (definitivo).
+  async function aplicarRecusas(vend,rows){
+    var since=new Date(); since.setDate(since.getDate()-90);
+    var r=await sb.from("va_interacoes").select("documento,motivo,data")
+      .eq("vendedor",vend).eq("resultado","recusado")
+      .or("motivo.eq.nao_quero_lead,data.gte."+since.toISOString());
+    if(r.error||!r.data||!r.data.length) return;
+    var byDoc={}; rows.forEach(function(f){ byDoc[f.documento]=f; });
+    var hoje=new Date(inicioDoDia());
+    r.data.forEach(function(x){
+      var m=x.motivo||"outro", f=byDoc[x.documento], dx=new Date(x.data);
+      if(m==="nao_quero_lead"){ REC.excl[x.documento]=1; return; }               // definitivo
+      if(m==="segmento_ruim_hoje"){
+        if(dx>=hoje){ REC.excl[x.documento]=1;                                    // volta amanhã
+          if(f&&f.segmento_primario) REC.segHoje[f.segmento_primario]=1; }        // penaliza o segmento no dia
+        return;
+      }
+      var dias=RECUSA_DIAS[m]||30;
+      var lim=new Date(); lim.setDate(lim.getDate()-dias);
+      if(dx>=lim) REC.excl[x.documento]=1;
+      if(m==="ticket_baixo"&&f){                                                  // aprende a faixa recusada, por categoria
+        var c=categoria(f); if(c!=="comp"&&(f.valor_ref||0)>REC.ticketMax[c]) REC.ticketMax[c]=f.valor_ref||0;
+      }
+    });
   }
   function renderMetrics(){
     var c=function(b){return fila.filter(function(f){return f.bucket===b;}).length;};
@@ -243,7 +308,7 @@ if(u){
     if(!fila.length){ $("#lista").innerHTML='<div class="empty">Fila zerada — você bateu a meta do dia. 👏</div>'; return; }
     $("#lista").innerHTML=fila.map(function(f){
       var b=BK[f.bucket]||["",""]; var w=waNum(f.celular);
-      var skip=(f.bucket>=0 && f.bucket<=4)?'<button class="skip" title="Agora não — repõe com outra sugestão" onclick="agoraNao(\''+f.documento+'\',event)">agora não</button>':"";
+      var skip=(f.bucket>=0 && f.bucket<=4)?'<button class="skip" title="Tirar da fila — e ensinar o programa por quê" onclick="agoraNao(\''+f.documento+'\',event,this)">agora não</button>':"";
       return '<div class="row '+(sel===f.documento?"sel":"")+'" onclick="abrirFicha(\''+f.documento+'\')">'
         +'<div class="main"><div class="nm">'+esc(f.empresa||f.documento)+'</div>'
         +'<div class="meta">'+esc(f.segmento_primario||"—")+' · '+esc(f.municipio||"")+(f.uf?"/"+f.uf:"")+' · '+brl(f.valor_ref)+'</div></div>'
@@ -252,13 +317,43 @@ if(u){
         +skip+'</div>';
     }).join("");
   }
-  // "Agora não": registra o adiamento, tira o card e repõe com o próximo melhor (mesma categoria).
-  window.agoraNao=async function(doc,ev){
+  // "Agora não": botão único — abre a janelinha de motivos logo abaixo dele.
+  // "Só hoje" = adiamento simples (repõe e volta em SNOOZE_DIAS). Os demais ensinam o ranking.
+  window.agoraNao=function(doc,ev,btn){
     if(ev) ev.stopPropagation();
-    if(u.role==="admin" && !selV.value){ banner("Selecione um vendedor para usar a reposição.","err"); return; }
+    if(u.role==="admin" && !selV.value){ banner("Selecione um vendedor para usar a fila.","err"); return; }
+    fecharPop();
+    function opt(m,t,d){ return '<button class="mopt" onclick="popMotivo(\''+doc+'\',\''+m+'\')">'+t+'<div class="d">'+d+'</div></button>'; }
+    var pop=document.createElement("div"); pop.className="pop"; pop.id="pop";
+    pop.innerHTML='<div style="font-size:12px;color:var(--muted);margin:2px 4px 8px;">Por que agora não? Sua resposta ensina a fila.</div>'
+      +opt('so_hoje','Só hoje','Adia por '+SNOOZE_DIAS+' dias e repõe com outra sugestão')
+      +opt('timing_errado','Timing','Cliente bom, hora errada — some por '+RECUSA_DIAS.timing_errado+' dias')
+      +opt('ticket_baixo','Valor baixo','Some por '+RECUSA_DIAS.ticket_baixo+' dias; valores parecidos descem no ranking')
+      +opt('segmento_ruim_hoje','Segmento','Volta amanhã — o segmento desce no ranking de hoje')
+      +opt('nao_quero_lead','Não quero atender','Nunca mais sugerir este cliente para você')
+      +opt('outro_ui','Outros','Escreva o motivo — some por '+RECUSA_DIAS.outro+' dias')
+      +'<div id="outroBox" style="display:none;padding:4px;"><input id="outroTxt" type="text" placeholder="Qual o motivo?" style="width:100%;">'
+      +'<button class="btn blue" style="margin-top:6px;width:100%;" onclick="popOutroOk(\''+doc+'\')">Confirmar</button></div>';
+    document.body.appendChild(pop);
+    var r=btn.getBoundingClientRect();
+    var top=r.bottom+6; if(top+330>window.innerHeight) top=Math.max(8,r.top-336);
+    pop.style.top=top+"px";
+    pop.style.left=Math.max(8,Math.min(window.innerWidth-278,r.right-264))+"px";
+    setTimeout(function(){ document.addEventListener("click",fecharPopFora); },0);
+  };
+  window.fecharPop=function(){ var p=document.getElementById("pop"); if(p)p.remove(); document.removeEventListener("click",fecharPopFora); };
+  function fecharPopFora(e){ var p=document.getElementById("pop"); if(p && !p.contains(e.target)) fecharPop(); }
+  window.popMotivo=function(doc,m){
+    if(m==="outro_ui"){ var b=document.getElementById("outroBox"); b.style.display="block"; document.getElementById("outroTxt").focus(); return; }
+    if(m==="so_hoje"){ fecharPop(); adiar(doc); return; }
+    fecharPop(); recusaMotivo(doc,m,null);
+  };
+  window.popOutroOk=function(doc){ var t=(document.getElementById("outroTxt").value||"").trim(); fecharPop(); recusaMotivo(doc,"outro",t||null); };
+  // adiamento simples ("só hoje"): mantém o comportamento antigo do agora não
+  window.adiar=async function(doc){
     var vend=(u.role==="admin"?selV.value:u.nome);
     removeReplace(doc,true);   // resposta imediata na tela
-    var ins=await sb.from("va_interacoes").insert({documento:doc,vendedor:vend,resultado:"agora_nao",canal:"fila"}).select("id");
+    var ins=await sb.from("va_interacoes").insert({documento:doc,vendedor:vend,resultado:"agora_nao",motivo:"so_hoje",canal:"fila"}).select("id");
     var id=(ins&&ins.data&&ins.data[0]&&ins.data[0].id)||null;
     showUndo(doc,id);
   };
@@ -270,6 +365,21 @@ if(u){
   window.desfazer=async function(id){
     if(id) await sb.from("va_interacoes").delete().eq("id",id);
     $("#toast").classList.remove("on"); carregar();
+  };
+  window.recusaMotivo=async function(doc,motivo,nota){
+    var vend=(u.role==="admin"?selV.value:u.nome);
+    var f=fila[idxOf(doc)];
+    // aprendizado imediato na sessão (o reload de amanhã reconstrói tudo do banco)
+    if(motivo==="segmento_ruim_hoje" && f && f.segmento_primario) REC.segHoje[f.segmento_primario]=1;
+    if(motivo==="ticket_baixo" && f){ var c=categoria(f); if(c!=="comp" && (f.valor_ref||0)>REC.ticketMax[c]) REC.ticketMax[c]=f.valor_ref||0; }
+    REC.excl[doc]=1;
+    removeReplace(doc,true);   // resposta imediata na tela, repõe mantendo a Mistura
+    var ins=await sb.from("va_interacoes").insert({documento:doc,vendedor:vend,resultado:"recusado",motivo:motivo,nota:nota||null,canal:"fila"}).select("id");
+    var id=(ins&&ins.data&&ins.data[0]&&ins.data[0].id)||null;
+    var msg={ticket_baixo:"Recusado — some por "+RECUSA_DIAS.ticket_baixo+" dias.",nao_quero_lead:"Recusado — não será mais sugerido para você.",timing_errado:"Recusado — some por "+RECUSA_DIAS.timing_errado+" dias.",segmento_ruim_hoje:"Recusado — volta amanhã.",outro:"Recusado — some por "+RECUSA_DIAS.outro+" dias."}[motivo]||"Recusado.";
+    var t=$("#toast");
+    t.innerHTML=msg+' <button onclick="desfazer(\''+(id||"")+'\')">desfazer</button>';
+    t.classList.add("on"); clearTimeout(t._tmr); t._tmr=setTimeout(function(){ t.classList.remove("on"); },6000);
   };
   window.abrirFicha=async function(doc){
     sel=doc; renderLista(); $("#fichaVazia").style.display="none"; $("#ficha").style.display="block";
@@ -290,21 +400,32 @@ if(u){
       +'<div class="inputs"><div class="cap">Só isto você registra</div><div class="ig">'
       +'<div><div class="l">Tentativas até falar</div><div class="stepper"><button onclick="bump(-1)">−</button><span class="n" id="att">'+tent+'</span><button onclick="bump(1)">+</button></div></div>'
       +'<div><div class="l">Próxima ligação (vira compromisso)</div><input id="prox" type="date" value="'+(f.proxima_data||"")+'"></div>'
-      +'<div><div class="l">Lembrete</div><input id="lemb" type="text" placeholder="ex.: pediu cotação" value="'+esc(f.lembrete||"")+'"></div></div></div>'
+      +'<div><div class="l">Lembrete</div><input id="lemb" type="text" placeholder="ex.: pediu cotação" value="'+esc(f.lembrete||"")+'"></div>'
+      +'<div><div class="l">Formato do contato</div><div class="chips" style="margin-top:2px;" id="fmtChips">'
+      +["voz","whatsapp","ambos"].map(function(s){return '<button class="chip" onclick="setFmt(this,\''+s+'\')">'+s+'</button>';}).join("")
+      +'</div></div></div></div>'
       +'<div style="margin-top:13px;border-top:1px solid var(--border);padding-top:10px;"><div style="font-size:12px;color:var(--muted2);">Situação</div><div class="chips">'
       +st.map(function(s){return '<button class="chip '+(f.status===s?"on":"")+'" onclick="setStatus(this,\''+s+'\')">'+s+'</button>';}).join("")+'</div></div>'
       +'<div class="fa"><button class="btn blue" onclick="verDetalhes()">Ver tudo</button><button class="btn green" onclick="salvar(\''+doc+'\')">Salvar registro</button><span class="saved" id="savedMsg">✓ salvo</span></div>';
     $("#ficha").dataset.status=f.status||"";
+    $("#ficha").dataset.formato="";
   };
   window.bump=function(n){ var e=$("#att"); e.textContent=Math.max(0,(parseInt(e.textContent)||0)+n); };
-  window.setStatus=function(btn,s){ document.querySelectorAll(".chip").forEach(function(c){c.classList.remove("on");}); btn.classList.add("on"); $("#ficha").dataset.status=s; };
+  window.setStatus=function(btn,s){ document.querySelectorAll(".chips .chip").forEach(function(c){ if(!c.closest("#fmtChips")) c.classList.remove("on"); }); btn.classList.add("on"); $("#ficha").dataset.status=s; };
+  // formato do contato: voz | whatsapp | ambos (opcional — clique de novo para desmarcar)
+  window.setFmt=function(btn,s){
+    var on=btn.classList.contains("on");
+    document.querySelectorAll("#fmtChips .chip").forEach(function(c){c.classList.remove("on");});
+    if(!on){ btn.classList.add("on"); $("#ficha").dataset.formato=s; } else { $("#ficha").dataset.formato=""; }
+  };
   window.salvar=async function(doc){
     var tent=parseInt($("#att").textContent)||0, prox=$("#prox").value||null, lemb=$("#lemb").value||null, status=$("#ficha").dataset.status||null;
     var upd={tentativas:tent,lembrete:lemb,proxima_data:prox,status:status,atualizado_em:new Date().toISOString()};
     if(prox) upd.compromisso=true;
     var r=await sb.from("va_cliente_status").update(upd).eq("documento",doc);
     if(r.error){ banner("Erro ao salvar: "+r.error.message,"err"); return; }
-    await sb.from("va_interacoes").insert({documento:doc,vendedor:(u.role==="admin"?selV.value:u.nome),resultado:status,tentativas_no_contato:tent,nota:lemb,canal:"fila"});
+    var fmt=$("#ficha").dataset.formato||null;
+    await sb.from("va_interacoes").insert({documento:doc,vendedor:(u.role==="admin"?selV.value:u.nome),resultado:status,tentativas_no_contato:tent,nota:lemb,canal:"fila",formato:fmt});
     var m=$("#savedMsg"); m.classList.add("on"); setTimeout(function(){m.classList.remove("on");},1500);
     banner("Registro salvo.","ok"); setTimeout(function(){banner("");},1600);
     // contato registrado = 1 sugestão FEITA. Sai da fila e NÃO é reposto (a meta do dia diminui).
@@ -326,7 +447,7 @@ if(u){
     $("#overlay").classList.add("on");
   };
   window.fecharModal=function(){ $("#overlay").classList.remove("on"); };
-  document.addEventListener("keydown",function(e){ if(e.key==="Escape")fecharModal(); });
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ fecharModal(); fecharPop(); } });
   var qtmr=null;
   $("#q").addEventListener("input",function(){
     clearTimeout(qtmr); var v=this.value.trim(); if(v.length<2) return;
