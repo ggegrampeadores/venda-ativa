@@ -15,6 +15,13 @@
   .meta-big .val{font-size:30px;}
   .prog{height:10px;background:var(--panel2);border-radius:6px;overflow:hidden;margin-top:8px;}
   .prog > div{height:100%;background:var(--green);}
+  .win{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:6px;font-size:13px;}
+  .win .val{color:var(--green);font-weight:600;margin-left:auto;white-space:nowrap;}
+  .win .dt{color:var(--muted);font-size:12px;}
+  .sextaB{background:rgba(88,166,255,.10);border:1px solid rgba(88,166,255,.35);border-radius:10px;padding:11px 14px;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .sextaB a{color:var(--blue);font-weight:600;text-decoration:underline;}
+  .sextaB .x{margin-left:auto;background:none;border:none;color:var(--muted2);font-size:16px;}
+  .hint{font-size:12px;color:var(--muted);margin:0 0 8px;}
 </style>
 </head>
 <body>
@@ -23,6 +30,7 @@
     <div><div class="va-h1">Meu painel</div><div class="va-sub" id="sub"></div></div>
     <select id="selV" style="display:none;"></select>
   </div>
+  <div id="sexta"></div>
   <div id="body"><div class="empty">Carregando…</div></div>
 </div>
 <script src="app.js"></script>
@@ -34,11 +42,26 @@ if(u){
   if(u.role==="admin"){ var sv=$("#selV"); sv.style.display="block"; sv.innerHTML='<option>Francisco</option><option>Matheus</option><option>Lorena</option>'; alvo=sv.value="Francisco"; sv.addEventListener("change",function(){ alvo=sv.value; carregar(); }); }
   carregar();
 
+  // Banner de sexta à tarde (13h–17h): convite para gerar o relatório da semana.
+  (function(){
+    var d=new Date();
+    if(d.getDay()===5 && d.getHours()>=13 && d.getHours()<17 && !sessionStorage.getItem("va_sexta_ok")){
+      $("#sexta").innerHTML='<div class="sextaB">📋 Sexta-feira — fechamento da semana! Que tal gerar seu relatório agora? '
+        +'<a href="relatorios.html">Gerar relatório</a>'
+        +'<button class="x" title="dispensar" onclick="this.parentNode.remove();sessionStorage.setItem(\'va_sexta_ok\',\'1\')">×</button></div>';
+    }
+  })();
+  function iso(d){ return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+  function fmtBR(s){ var p=(s||"").split("-"); return p.length===3?(p[2]+"/"+p[1]):s; }
   async function carregar(){
     $("#body").innerHTML='<div class="empty">Carregando…</div>';
     $("#sub").textContent=alvo+" · "+new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
     var hoje=new Date(); var ini=new Date(hoje.getFullYear(),hoje.getMonth(),1).toISOString();
     var d0=new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate()).toISOString();
+    // semana corrente (sábado → sexta, fecha na própria sexta) para as vitórias
+    var day=hoje.getDay();
+    var fri=new Date(hoje); fri.setDate(hoje.getDate()+(day===6?-1:5-day));
+    var sab=new Date(fri); sab.setDate(fri.getDate()-6);
     var pr=await sb.from("va_parametros").select("valor").eq("chave","meta_diaria").limit(1);
     var meta=30; if(!pr.error && pr.data && pr.data[0] && pr.data[0].valor && pr.data[0].valor[alvo]!=null) meta=pr.data[0].valor[alvo];
     var it=await sb.from("va_interacoes").select("resultado,data").eq("vendedor",alvo).gte("data",ini);
@@ -50,26 +73,37 @@ if(u){
     var fila=(fl.data||[]);
     var ca=await sb.from("va_cliente_status").select("segmento_primario").eq("vendedor_dono",alvo).eq("status","cliente");
     var cart=(ca.data||[]);
+    // vitórias da semana: NFs (Bling) de clientes que VOCÊ contactou — o registro carimba a venda como sua
+    var vit=await sb.rpc("fn_va_vitorias",{p_vendedor:alvo,p_ini:iso(sab),p_fim:iso(fri)});
+    var V=vit.data||[]; var valSem=V.reduce(function(s,x){return s+Number(x.valor||0);},0);
 
     var bk=function(b){return fila.filter(function(f){return f.bucket===b;}).length;};
     var pct=Math.min(100,Math.round(hojeN/(meta||1)*100));
     function bySeg(arr){ var m={}; arr.forEach(function(x){ var s=x.segmento_primario||"—"; m[s]=(m[s]||0)+1; }); return m; }
     function barsHTML(m){ var max=1; for(var k in m) if(m[k]>max)max=m[k]; var keys=Object.keys(m).sort(function(a,b){return m[b]-m[a];}); if(!keys.length) return '<div class="empty">—</div>'; return '<div class="bars">'+keys.map(function(k){ return '<div class="bar"><span>'+esc(k)+'</span><div class="track"><div class="fillb" style="width:'+Math.round(m[k]/max*100)+'%"></div></div><span style="text-align:right;color:var(--muted)">'+m[k]+'</span></div>'; }).join("")+'</div>'; }
 
+    var vitHtml=V.length? V.slice(0,8).map(function(x){ return '<div class="win">🎉 <span>'+esc(x.empresa||x.documento)+'</span><span class="dt">'+fmtBR(x.data_nf)+'</span><span class="val">'+brl(x.valor)+'</span></div>'; }).join("")
+      : '<div class="empty" style="padding:12px;">Nenhuma venda carimbada ainda nesta semana. Registre seus contatos — é o registro que faz a venda contar como SUA vitória aqui e no relatório de sexta.</div>';
+
     $("#body").innerHTML=
       '<div class="mrow">'
         +'<div class="metric meta-big"><div class="lbl">Tarefas hoje</div><div class="val">'+hojeN+' <span style="font-size:15px;color:var(--muted)">/ '+meta+'</span></div><div class="prog"><div style="width:'+pct+'%"></div></div></div>'
-        +'<div class="metric"><div class="lbl">Tarefas no mês</div><div class="val">'+mesN+'</div></div>'
-        +'<div class="metric"><div class="lbl">Contatos efetivos (mês)</div><div class="val" style="color:var(--green)">'+efetiv+'</div></div>'
+        +'<div class="metric"><div class="lbl">Vendas na semana</div><div class="val" style="color:var(--green)">'+V.length+'</div></div>'
+        +'<div class="metric"><div class="lbl">Valor vendido (semana)</div><div class="val" style="color:var(--green)">'+brl(valSem)+'</div></div>'
+        +'<div class="metric"><div class="lbl">Contatos efetivos (mês)</div><div class="val">'+efetiv+'</div></div>'
         +'<div class="metric"><div class="lbl">Carteira (clientes)</div><div class="val">'+cart.length+'</div></div>'
       +'</div>'
+      +'<div class="card" style="margin-bottom:16px;"><h3 style="font-size:14px;font-weight:600;margin-bottom:2px;">Suas vitórias da semana</h3>'
+        +'<div class="hint">Vendas confirmadas por NF de clientes que você contactou nos últimos 30 dias · semana de '+fmtBR(iso(sab))+' a '+fmtBR(iso(fri))+'</div>'
+        +vitHtml
+        +'<div class="va-sub" style="margin:8px 0 0;"><a href="relatorios.html" style="color:var(--blue);text-decoration:underline;">Ver relatório completo da semana →</a></div></div>'
       +'<div class="cols">'
         +'<div class="card"><h3 style="font-size:14px;font-weight:600;margin-bottom:2px;">Fila de hoje por tipo</h3><div class="va-sub" style="margin:0;">'+fila.length+' contatos esperando</div>'
           +barsHTML({Compromissos:bk(0),"Recompra na hora":bk(1),Reativar:bk(2),"Lead novo":bk(3),"Orçamento":bk(4)})+'</div>'
         +'<div class="card"><h3 style="font-size:14px;font-weight:600;margin-bottom:2px;">Sua carteira por segmento</h3><div class="va-sub" style="margin:0;">'+cart.length+' clientes</div>'
           +barsHTML(bySeg(cart))+'</div>'
       +'</div>'
-      +'<div class="va-sub" style="margin-top:16px;">Vendas e margem por venda entram aqui quando ligarmos os pedidos do Bling — por enquanto o painel mostra a sua atividade, a fila e a carteira.</div>';
+      +'<div class="va-sub" style="margin-top:16px;">Vendas e propostas entram sozinhas do Bling — você só registra o contato. É o registro que liga a venda ao seu nome.</div>';
   }
 }
 </script>
