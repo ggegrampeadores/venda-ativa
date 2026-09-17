@@ -54,6 +54,11 @@
   + ".va-side a{display:block;padding:9px 11px;border-radius:8px;font-size:14px;color:var(--muted);margin-bottom:3px;}"
   + ".va-side a:hover{background:var(--panel2);color:var(--text);}"
   + ".va-side a.on{background:var(--panel2);color:var(--blue);}"
+  + ".va-side a.va-grp{display:flex;justify-content:space-between;align-items:center;}.va-car{font-size:11px;color:var(--muted2);}"
+  + ".va-sub-menu{margin:0 0 6px 8px;padding-left:8px;border-left:1px solid var(--border);}"
+  + ".va-side .va-sub-menu a{font-size:12.5px;line-height:1.35;padding:6px 9px;margin-bottom:2px;display:flex;justify-content:space-between;gap:6px;align-items:flex-start;}"
+  + ".va-side .va-sub-menu a b{font-weight:500;font-size:11px;color:var(--muted2);white-space:nowrap;padding-top:1px;}"
+  + ".va-side .va-sub-menu a.on b{color:var(--blue);}"
   + ".va-foot{margin-top:auto;font-size:12px;color:var(--muted);border-top:1px solid var(--border);padding-top:12px;}"
   + ".va-foot button{background:none;border:none;color:var(--muted2);font-size:12px;text-decoration:underline;padding:0;margin-top:4px;}"
   + ".va-content{margin-left:194px;padding:22px 26px 60px;max-width:1180px;}"
@@ -111,15 +116,49 @@
   }
 
   var MENU = {
-    func: [["dashboard.html","Meu painel"],["contatos.html","Contatos"],["campanha.html","Série Especial"],["listagem.html","Listagem"],["relatorios.html","Relatórios"]],
-    admin: [["admin.html","Visão geral"],["equipe.html","Equipe"],["parametros.html","Parâmetros"],["contatos.html","Contatos"],["campanha.html","Série Especial"],["listagem.html","Listagem"],["relatorios.html","Relatórios"]]
+    func: [["dashboard.html","Meu painel"],["contatos.html","Contatos"],["campanha.html","Séries Especiais"],["listagem.html","Listagem"],["relatorios.html","Relatórios"]],
+    admin: [["admin.html","Visão geral"],["equipe.html","Equipe"],["parametros.html","Parâmetros"],["contatos.html","Contatos"],["campanha.html","Séries Especiais"],["listagem.html","Listagem"],["relatorios.html","Relatórios"]]
   };
+
+  // Sub-menu "Series Especiais": Comparativo + uma entrada por serie aberta do usuario (admin ve todas).
+  function montarSeries(u, active){
+    var h=document.getElementById("va-ser-h"), box=document.getElementById("va-ser-sub"), car=document.getElementById("va-ser-car");
+    if(!h||!box) return;
+    var naPag=(active==="campanha.html"), aberto=naPag;
+    try{ if(sessionStorage.getItem("va_series_open")==="1") aberto=true; }catch(e){}
+    function pinta(){ box.style.display=aberto?"block":"none"; car.textContent=aberto?"▾":"▸"; }
+    pinta();
+    h.addEventListener("click",function(e){
+      e.preventDefault(); aberto=!aberto;
+      try{ sessionStorage.setItem("va_series_open",aberto?"1":"0"); }catch(er){}
+      pinta();
+    });
+    var idAtual=naPag?parseInt(new URLSearchParams(location.search).get("id")):NaN;
+    function link(href,txt,on,badge){ return '<a href="'+href+'" class="'+(on?"on":"")+'"><span>'+txt+'</span>'+(badge!=null?'<b>'+badge+'</b>':'')+'</a>'; }
+    box.innerHTML=link("campanha.html","Comparativo",naPag&&!idAtual);
+    var q=sb.from("vw_campanha_resumo").select("id,nome,vendedor,ordem,n_pendente,n_tentado").is("encerrada_em",null).order("ordem",{ascending:true,nullsFirst:false}).order("id");
+    if(u.role!=="admin") q=q.eq("vendedor",u.nome);
+    q.then(function(r){
+      if(r.error||!r.data) return;
+      var varios={}; r.data.forEach(function(c){ varios[c.vendedor]=1; });
+      var multi=Object.keys(varios).length>1;
+      box.innerHTML=link("campanha.html","Comparativo",naPag&&!idAtual)
+        + r.data.map(function(c){
+            var nome=String(c.nome||"").replace(/\s+—.*$/,"")+(multi?" ("+c.vendedor+")":"");
+            return link("campanha.html?id="+c.id, esc(nome), naPag&&idAtual===c.id, (c.n_pendente||0)+(c.n_tentado||0));
+          }).join("");
+    });
+  }
 
   // Monta o menu lateral e retorna o usuario, ou mostra login e retorna null.
   function montar(active){
     var u=user();
     if(!u){ showLogin(); return null; }
     var itens=(MENU[u.role]||MENU.func).map(function(m){
+      if(m[0]==="campanha.html"){   // grupo com sub-topicos: uma entrada por serie aberta
+        return '<a href="campanha.html" id="va-ser-h" class="va-grp">'+m[1]+'<span class="va-car" id="va-ser-car">▸</span></a>'
+          + '<div id="va-ser-sub" class="va-sub-menu" style="display:none"></div>';
+      }
       return '<a href="'+m[0]+'" class="'+(active===m[0]?"on":"")+'">'+m[1]+'</a>';
     }).join("");
     var side='<div class="va-side"><div class="va-brand">Venda Ativa <span>GGE</span></div>'
@@ -127,6 +166,7 @@
       + itens
       + '<div class="va-foot">'+esc(u.nome)+'<br><button onclick="VA.sair()">sair</button></div></div>';
     document.body.insertAdjacentHTML("afterbegin", side);
+    montarSeries(u, active);
     // usuario desativado (ou removido) perde a sessao
     vendedores().then(function(list){
       var ok=list.some(function(v){ return v.nome===u.nome && v.ativo; });

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d1117'/%3E%3Crect x='2.5' y='2.5' width='59' height='59' rx='12' fill='none' stroke='%2358a6ff' stroke-width='3'/%3E%3Ctext x='32' y='44' font-family='Arial,sans-serif' font-size='32' font-weight='bold' text-anchor='middle' fill='%2358a6ff'%3EVA%3C/text%3E%3C/svg%3E">
-<title>Série Especial · Venda Ativa</title>
+<title>Séries Especiais · Venda Ativa</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
@@ -32,14 +32,27 @@
   .nova h3{font-size:14px;font-weight:600;margin-bottom:2px;}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
   .msg{font-size:13px;margin-top:10px;min-height:18px;} .msg.ok{color:var(--green);} .msg.err{color:var(--red);}
+  .apelo{border-left:3px solid var(--blue);margin-bottom:16px;font-size:13.5px;line-height:1.5;}
+  .apelo .t{font-size:11px;color:var(--blue);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
+  .scard{display:block;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;}
+  .scard:hover{border-color:#3d4757;}
+  .scard .st{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap;}
+  .scard .sn{font-size:15px;font-weight:600;}
+  .scard .sd{font-size:12px;color:var(--muted);margin:2px 0 8px;}
+  .scard .sk{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);}
+  .scard .sk b{color:var(--text);font-weight:600;}
+  .cmpw{overflow-x:auto;margin:6px 0 18px;}
+  table.tbl td.num,table.tbl th.num{text-align:right;}
+  .h2{font-size:14px;font-weight:600;margin:20px 0 8px;}
+  .campo{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted);}
   @media(max-width:700px){.item{grid-template-columns:30px 1fr;}.acts{grid-column:1 / -1;justify-content:flex-start;}}
 </style>
 </head>
 <body>
 <div class="va-content">
   <div class="top">
-    <div><div class="va-h1" id="titulo">Série Especial</div><div class="va-sub" id="sub"></div></div>
-    <select id="selC" style="display:none;"></select>
+    <div><div class="va-h1" id="titulo">Séries Especiais</div><div class="va-sub" id="sub"></div></div>
+    <select id="selC" style="display:none;margin-bottom:14px;"></select>
   </div>
   <div id="body"><div class="empty">Carregando…</div></div>
   <div id="adminBox"></div>
@@ -51,13 +64,16 @@ if(u){
   var sb=VA.sb, esc=VA.esc, brl=VA.brl, waNum=VA.waNum, $=function(s){return document.querySelector(s);};
   var CAMPS=[], CID=null, ITENS=[], FILTRO="abertos";
   var ET_LBL={pendente:"A fazer",tentado:"Tentado",contactado:"Contactado",proposta:"Proposta",venda:"Venda",descartado:"Descartado"};
+  var TIPOS={top_chance:"Recompra (maior chance de venda)",orcamento:"Orçamento sem sucesso",produto:"Produto / segmento",sumiu_preco_novo:"Sumiu antes do preço novo",grandes_ml:"Grandes do Mercado Livre"};
   function fmtD(s){ if(!s) return ""; s=String(s);
     if(s.length>10){ var d=new Date(s); return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0"); }   // timestamp → dia local
     var p=s.split("-"); return p[2]+"/"+p[1]; }
+  function pct(a,b){ return b>0?Math.round(a/b*100)+"%":"—"; }
+  function camp(id){ return CAMPS.filter(function(x){return x.id===id;})[0]; }
 
   init();
   async function init(){
-    var q=sb.from("va_campanhas").select("id,nome,vendedor,descricao,criada_em,encerrada_em").order("criada_em",{ascending:false});
+    var q=sb.from("vw_campanha_resumo").select("*").order("ordem",{ascending:true,nullsFirst:false}).order("id");
     if(u.role!=="admin") q=q.eq("vendedor",u.nome);
     var r=await q;
     if(r.error){ $("#body").innerHTML='<div class="card">Erro: '+esc(r.error.message)+'</div>'; return; }
@@ -65,20 +81,49 @@ if(u){
     if(u.role==="admin") renderAdmin();
     if(!CAMPS.length){ $("#body").innerHTML='<div class="empty">Nenhuma Série Especial '+(u.role==="admin"?"criada ainda.":"para você no momento.")+'</div>'; return; }
     var sel=$("#selC");
-    if(CAMPS.length>1||u.role==="admin"){
-      sel.style.display="block";
-      sel.innerHTML=CAMPS.map(function(c){ return '<option value="'+c.id+'">'+esc(c.nome)+' · '+esc(c.vendedor)+(c.encerrada_em?" (encerrada)":"")+'</option>'; }).join("");
-      sel.onchange=function(){ CID=parseInt(sel.value); carregar(); };
-    }
+    sel.style.display="block";
+    sel.innerHTML='<option value="">Comparativo das séries</option>'+CAMPS.map(function(c){ return '<option value="'+c.id+'">'+esc(c.nome)+(u.role==="admin"?' · '+esc(c.vendedor):'')+(c.encerrada_em?" (encerrada)":"")+'</option>'; }).join("");
+    sel.onchange=function(){ location.href="campanha.html"+(sel.value?"?id="+sel.value:""); };
     var want=parseInt(new URLSearchParams(location.search).get("id"));
-    var ativa=CAMPS.filter(function(c){return !c.encerrada_em;})[0]||CAMPS[0];
-    CID=CAMPS.some(function(c){return c.id===want;})?want:ativa.id; sel.value=CID;
-    carregar();
+    if(camp(want)){ CID=want; sel.value=CID; carregar(); }
+    else { CID=null; sel.value=""; renderGeral(); }
   }
 
+  // ---------- Comparativo: todas as séries lado a lado
+  function trabalhados(c){ return c.n_itens-c.n_pendente-c.n_tentado; }
+  function renderGeral(){
+    $("#titulo").textContent="Séries Especiais";
+    $("#sub").textContent="Cada série é uma lista fechada com um apelo diferente. Nenhum contato aparece em mais de uma série aberta. Compare aqui qual abordagem rende mais.";
+    var ab=CAMPS.filter(function(c){return !c.encerrada_em;}), en=CAMPS.filter(function(c){return c.encerrada_em;});
+    function card(c){
+      var tr=trabalhados(c), n=c.n_itens||1;
+      function seg(k,v){ return v?'<span class="'+k+'" style="width:'+(v/n*100)+'%"></span>':''; }
+      return '<a class="scard" href="campanha.html?id='+c.id+'"><div class="st"><div class="sn">'+esc(c.nome)+'</div>'
+        +'<div class="meta">'+(u.role==="admin"?esc(c.vendedor)+' · ':'')+'início '+fmtD(c.criada_em)+(c.encerrada_em?' · encerrada '+fmtD(c.encerrada_em):'')+'</div></div>'
+        +'<div class="sd">'+esc(c.descricao||"")+'</div>'
+        +'<div class="prog">'+seg("pg-venda",c.n_venda)+seg("pg-prop",c.n_proposta)+seg("pg-cont",c.n_contactado)+seg("pg-desc",c.n_descartado)+seg("pg-tent",c.n_tentado)+'</div>'
+        +'<div class="sk"><span><b>'+c.n_itens+'</b> contatos</span><span><b>'+(c.n_pendente+c.n_tentado)+'</b> a fazer</span><span><b>'+tr+'</b> trabalhados</span>'
+        +'<span style="color:#a371f7"><b style="color:#a371f7">'+(c.n_proposta+c.n_venda)+'</b> propostas</span><span style="color:var(--green)"><b style="color:var(--green)">'+c.n_venda+'</b> vendas · '+brl(c.valor_vendas)+'</span></div></a>';
+    }
+    function tabela(L){
+      return '<div class="cmpw card" style="padding:4px 6px;"><table class="tbl"><thead><tr><th>Série</th><th class="num">Contatos</th><th class="num">Trabalhados</th><th class="num">Falou com o cliente</th><th class="num">Propostas</th><th class="num">Vendas</th><th class="num">Venda / falou</th><th class="num">Valor vendido</th><th class="num">R$ por contato trabalhado</th></tr></thead><tbody>'
+        + L.map(function(c){ var tr=trabalhados(c);
+            return '<tr><td><a href="campanha.html?id='+c.id+'" style="color:var(--blue)">'+esc(c.nome)+'</a></td><td class="num">'+c.n_itens+'</td><td class="num">'+tr+' ('+pct(tr,c.n_itens)+')</td><td class="num">'+c.n_falou+'</td><td class="num">'+(c.n_proposta+c.n_venda)+'</td><td class="num">'+c.n_venda+'</td><td class="num">'+pct(c.n_venda,c.n_falou)+'</td><td class="num">'+brl(c.valor_vendas)+'</td><td class="num">'+(tr>0?brl(Number(c.valor_vendas)/tr):"—")+'</td></tr>'; }).join("")
+        + '</tbody></table></div>';
+    }
+    var h="";
+    if(ab.length){ h+='<div class="h2" style="margin-top:0">Comparativo</div>'+tabela(ab)
+      +'<div class="va-sub">Com listas de 30 a 50 contatos, só diferença grande entre as séries é conclusiva. Trabalhe um pouco de cada série por dia para a semana não distorcer a comparação.</div>'
+      +'<div class="h2">Séries abertas</div>'+ab.map(card).join(""); }
+    else h+='<div class="empty">Nenhuma série aberta no momento.</div>';
+    if(en.length) h+='<div class="h2">Encerradas</div>'+tabela(en);
+    $("#body").innerHTML=h;
+  }
+
+  // ---------- Uma série
   async function carregar(){
     $("#body").innerHTML='<div class="empty">Carregando…</div>';
-    var c=CAMPS.filter(function(x){return x.id===CID;})[0];
+    var c=camp(CID);
     $("#titulo").textContent=c.nome;
     $("#sub").textContent=(c.descricao||"")+" Início em "+fmtD(c.criada_em)+(c.encerrada_em?" · encerrada em "+fmtD(c.encerrada_em):"")+".";
     var r=await sb.from("vw_campanha_itens").select("*").eq("campanha_id",CID).order("posicao").limit(1000);
@@ -89,12 +134,14 @@ if(u){
   function cnt(e){ return ITENS.filter(function(x){return x.etapa===e;}).length; }
   window.filtrar=function(f){ FILTRO=f; render(); };
   function render(){
-    var n=ITENS.length||1, c=CAMPS.filter(function(x){return x.id===CID;})[0];
+    var n=ITENS.length||1, c=camp(CID);
     var nV=cnt("venda"), nP=cnt("proposta"), nC=cnt("contactado"), nT=cnt("tentado"), nD=cnt("descartado"), nA=cnt("pendente");
-    var trabalhados=n-nA-nT, valor=ITENS.reduce(function(s,x){return s+Number(x.valor_vendas||0);},0);
+    var trab=n-nA-nT, valor=ITENS.reduce(function(s,x){return s+Number(x.valor_vendas||0);},0);
+    if(!ITENS.length) trab=0;
     function seg(k,v){ return v?'<span class="'+k+'" style="width:'+(v/n*100)+'%"></span>':''; }
+    var apelo=c.apelo?'<div class="card apelo"><div class="t">Abordagem desta série</div>'+esc(c.apelo)+'</div>':'';
     var head='<div class="mrow">'
-      +'<div class="metric"><div class="lbl">Trabalhados</div><div class="val">'+trabalhados+' <span style="font-size:14px;color:var(--muted)">/ '+ITENS.length+'</span></div></div>'
+      +'<div class="metric"><div class="lbl">Trabalhados</div><div class="val">'+trab+' <span style="font-size:14px;color:var(--muted)">/ '+ITENS.length+'</span></div></div>'
       +'<div class="metric"><div class="lbl">A fazer</div><div class="val">'+(nA+nT)+'</div></div>'
       +'<div class="metric"><div class="lbl">Propostas</div><div class="val" style="color:#a371f7">'+(nP+nV)+'</div></div>'
       +'<div class="metric"><div class="lbl">Vendas</div><div class="val" style="color:var(--green)">'+nV+'</div></div>'
@@ -121,40 +168,58 @@ if(u){
         +'<a class="btn sm blue" href="contatos.html?doc='+encodeURIComponent(x.documento)+'&serie='+CID+'">Abrir ficha</a></div></div>';
     }).join(""):'<div class="empty">'+(FILTRO==="abertos"?"Série concluída — todos os contatos foram trabalhados. 🎯":"Nada aqui ainda.")+'</div>';
     var rod='<div class="va-sub" style="margin-top:14px;">O andamento é automático: “contactado” vem do registro na ficha; “proposta” e “venda” vêm dos pedidos do Bling lançados depois do início da série (atualiza com a coleta diária).</div>';
-    $("#body").innerHTML=head+chips+lista+rod;
+    $("#body").innerHTML=apelo+head+chips+lista+rod;
   }
 
   // ---------- Admin: nova série / encerrar
   async function renderAdmin(){
     var VL=[]; try{ VL=await VA.vendedores(); }catch(e){}
-    var abertas=CAMPS.filter(function(c){return !c.encerrada_em;});
+    var emTela=camp(parseInt(new URLSearchParams(location.search).get("id")));
     $("#adminBox").innerHTML='<div class="card nova"><h3>Nova Série Especial</h3>'
-      +'<div class="va-sub" style="margin-bottom:12px;">Monta a lista na hora com os contatos de maior chance de venda do vendedor: só quem já é cliente ou já teve contato com sucesso/proposta, com telefone, fora de outra série aberta. Pesos: timing de recompra 35 · recência 20 · proposta/contato recente 20 · frequência 15 · valor 10.</div>'
-      +'<div class="row"><input type="text" id="cNome" placeholder="Nome (ex.: Série Especial 02)" maxlength="60" style="min-width:260px">'
-      +'<select id="cVend">'+VA.optsVend(VL,false)+'</select>'
-      +'<select id="cN"><option>50</option><option selected>100</option><option>150</option></select>'
+      +'<div class="va-sub" style="margin-bottom:12px;">Monta a lista na hora, só com quem tem telefone e está fora de qualquer outra série aberta (por documento, grupo econômico e telefone). Cada tipo tem seu critério e sua abordagem.</div>'
+      +'<div class="row" style="align-items:flex-end">'
+      +'<label class="campo">Tipo<select id="cTipo" onchange="tipoMudou()">'+Object.keys(TIPOS).map(function(k){return '<option value="'+k+'">'+TIPOS[k]+'</option>';}).join("")+'</select></label>'
+      +'<label class="campo">Nome<input type="text" id="cNome" placeholder="ex.: 06 · Recompra — 2ª rodada" maxlength="60" style="min-width:240px"></label>'
+      +'<label class="campo">Vendedor<select id="cVend">'+VA.optsVend(VL,false)+'</select></label>'
+      +'<label class="campo">Tamanho<select id="cN"><option>30</option><option selected>50</option><option>100</option><option>150</option></select></label>'
+      +'<label class="campo" id="fTk">Ticket mínimo (R$)<input type="number" id="cTk" value="800" min="0" step="100" style="width:110px"></label>'
+      +'<label class="campo" id="fSeg" style="display:none">Segmento<select id="cSeg"><option>Alicates</option><option>Linha Box</option><option>Grampos Industriais</option><option>Pinos</option><option>Pregos</option></select></label>'
+      +'<label class="campo" id="fCod" style="display:none">Códigos do produto (separados por vírgula)<input type="text" id="cCod" placeholder="ex.: 5019, 2115" style="min-width:200px"></label>'
       +'<button class="btn green" onclick="criarSerie()">Montar série</button>'
-      +(abertas.length?'<span style="flex:1"></span><button class="btn" id="bEnc" onclick="encerrar()">Encerrar a série aberta em tela</button>':'')
+      +(emTela&&!emTela.encerrada_em?'<span style="flex:1"></span><button class="btn" id="bEnc" onclick="encerrar()">Encerrar a série em tela</button>':'')
       +'</div><div class="msg" id="mC"></div></div>';
+    tipoMudou();
   }
+  window.tipoMudou=function(){
+    var t=$("#cTipo").value;
+    $("#fTk").style.display=(t==="top_chance"||t==="orcamento"||t==="sumiu_preco_novo")?"flex":"none";
+    $("#fSeg").style.display=$("#fCod").style.display=(t==="produto")?"flex":"none";
+  };
   function msg(t,k){ var e=$("#mC"); if(e){ e.className="msg "+(k||""); e.textContent=t; } }
   window.criarSerie=async function(){
-    var nome=($("#cNome").value||"").trim(), v=$("#cVend").value, n=parseInt($("#cN").value);
+    var t=$("#cTipo").value, nome=($("#cNome").value||"").trim(), v=$("#cVend").value, n=parseInt($("#cN").value), params={};
     if(nome.length<3){ msg("Dê um nome para a série.","err"); return; }
     if(!v){ msg("Escolha o vendedor.","err"); return; }
+    if(t==="top_chance"||t==="orcamento"||t==="sumiu_preco_novo") params.ticket_min=Math.max(0,parseFloat($("#cTk").value)||0);
+    if(t==="produto"){
+      var cods=($("#cCod").value||"").split(/[,;\s]+/).map(function(x){return x.replace(/[^0-9A-Za-z\/-]/g,"");}).filter(function(x){return x.length>=3;});
+      if(!cods.length){ msg("Informe ao menos um código de produto (3+ caracteres).","err"); return; }
+      var seg=$("#cSeg").value;
+      params={segmento:seg, regex_produto:"("+cods.join("|")+")", regex_segmento:seg==="Alicates"?"alicate":"("+cods.join("|")+")", rotulo_produto:cods.join("/")};
+    }
     msg("Montando…");
-    var r=await sb.rpc("va_campanha_criar_top",{p_nome:nome,p_vendedor:v,p_n:n});
+    var r=await sb.rpc("va_campanha_criar",{p_tipo:t,p_nome:nome,p_vendedor:v,p_n:n,p_params:params});
     if(r.error){ msg("Erro: "+r.error.message,"err"); return; }
     location.href="campanha.html?id="+r.data.campanha_id;
   };
   var encArmado=false;
   window.encerrar=async function(){
-    var c=CAMPS.filter(function(x){return x.id===CID;})[0];
+    var c=camp(CID);
     if(!c||c.encerrada_em){ msg("A série em tela já está encerrada.","err"); return; }
-    if(!encArmado){ encArmado=true; $("#bEnc").textContent="Confirmar: encerrar “"+c.nome+"”"; setTimeout(function(){ encArmado=false; var b=$("#bEnc"); if(b) b.textContent="Encerrar a série aberta em tela"; },5000); return; }
+    if(!encArmado){ encArmado=true; $("#bEnc").textContent="Confirmar: encerrar “"+c.nome+"”"; setTimeout(function(){ encArmado=false; var b=$("#bEnc"); if(b) b.textContent="Encerrar a série em tela"; },5000); return; }
     var r=await sb.from("va_campanhas").update({encerrada_em:new Date().toISOString()}).eq("id",CID);
     if(r.error){ msg("Erro: "+r.error.message,"err"); return; }
-    location.href="campanha.html?id="+CID;
+    location.href="campanha.html";
   };
 }
 </script>
