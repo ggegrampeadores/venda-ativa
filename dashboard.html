@@ -39,8 +39,12 @@ var u=VA.montar("dashboard.html");
 if(u){
   var sb=VA.sb, brl=VA.brl, esc=VA.esc, $=function(s){return document.querySelector(s);};
   var alvo=u.nome;
-  if(u.role==="admin"){ var sv=$("#selV"); sv.style.display="block"; sv.innerHTML='<option>Francisco</option><option>Matheus</option><option>Lorena</option>'; alvo=sv.value="Francisco"; sv.addEventListener("change",function(){ alvo=sv.value; carregar(); }); }
-  carregar();
+  if(u.role==="admin"){
+    var sv=$("#selV"); sv.style.display="block";
+    sv.addEventListener("change",function(){ alvo=sv.value; carregar(); });
+    VA.vendedores().then(function(list){ sv.innerHTML=VA.optsVend(list,true); alvo=sv.value; carregar(); })
+      .catch(function(e){ $("#body").innerHTML='<div class="card">Erro ao carregar a equipe: '+esc(e.message||e)+'</div>'; });
+  } else { carregar(); }
 
   // Banner de sexta à tarde (13h–17h): convite para gerar o relatório da semana.
   (function(){

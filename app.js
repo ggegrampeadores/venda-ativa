@@ -3,7 +3,7 @@
   var SB_URL = window.GGE_SUPABASE_URL || "https://opceujqpqyvxsatzdarg.supabase.co";
   var SB_KEY = window.GGE_SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9wY2V1anFwcXl2eHNhdHpkYXJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NzIwMDEsImV4cCI6MjA4OTA0ODAwMX0.XKhgaNBJF8xiHiGEWEs8HL1dq5KFJpo2_RQckjsY9kc";
   var OWNER_KEY = "gge2026";
-  var ROLES = { "Francisco":"func", "Matheus":"func", "Lorena":"func", "Admin":"admin" };
+  // Equipe vem da tabela va_vendedores (Admin > Equipe). Nenhum nome fica no codigo.
 
   var sb = supabase.createClient(SB_URL, SB_KEY);
 
@@ -13,6 +13,33 @@
   function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
   function user(){ try{ return JSON.parse(sessionStorage.getItem("va_user")); }catch(e){ return null; } }
   function sair(){ sessionStorage.removeItem("va_user"); location.href="index.html"; }
+
+  // ---- Equipe (va_vendedores): fonte unica de nomes ----
+  var _vendP=null;
+  // Retorna Promise com TODAS as linhas [{nome,papel,ativo,herda_de}], vendedores e admin, ativos e inativos.
+  function vendedores(force){
+    if(!_vendP||force){
+      _vendP=sb.from("va_vendedores").select("nome,papel,ativo,herda_de").order("nome").then(function(r){
+        if(r.error){ _vendP=null; throw r.error; }
+        return r.data||[];
+      });
+    }
+    return _vendP;
+  }
+  function ativos(list){ return list.filter(function(v){ return v.ativo && v.papel==="func"; }); }
+  function inativos(list){ return list.filter(function(v){ return !v.ativo && v.papel==="func"; }); }
+  // <option>s de vendedores. inat=true acrescenta os inativos (historico) marcados.
+  function optsVend(list,inat){
+    var h=ativos(list).map(function(v){ return '<option value="'+esc(v.nome)+'">'+esc(v.nome)+'</option>'; }).join("");
+    if(inat) h+=inativos(list).map(function(v){ return '<option value="'+esc(v.nome)+'">'+esc(v.nome)+' (inativo)</option>'; }).join("");
+    return h;
+  }
+  // nomes cujo historico (recusas, "agora nao", feitas hoje) vale para este vendedor: ele + antecessores
+  function nomesDe(list,nome){
+    var out=[nome];
+    list.forEach(function(v){ if(v.nome===nome && v.herda_de) v.herda_de.forEach(function(h){ if(out.indexOf(h)<0) out.push(h); }); });
+    return out;
+  }
 
   var CSS = ""
   + ":root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2330;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--muted2:#6e7681;--blue:#58a6ff;--green:#3fb950;--red:#f85149;--yellow:#d29922;}"
@@ -53,20 +80,30 @@
   document.head.insertAdjacentHTML("beforeend","<style>"+CSS+"</style>");
 
   function showLogin(){
-    var nomes = Object.keys(ROLES).map(function(n){return "<option>"+n+"</option>";}).join("");
     var html = '<div id="va-login"><div class="box">'
       + '<div style="font-size:18px;font-weight:700;margin-bottom:2px;">Venda Ativa <span style="color:#58a6ff">GGE</span></div>'
       + '<div style="font-size:12px;color:#8b949e;margin-bottom:16px;">Entre para começar</div>'
-      + '<select id="va-nome">'+nomes+'</select>'
+      + '<select id="va-nome"><option value="">Carregando…</option></select>'
       + '<input id="va-pw" type="password" placeholder="Senha">'
       + '<button id="va-enter">Entrar</button>'
       + '<div id="va-err" style="font-size:12px;color:#f85149;margin-top:8px;height:14px;"></div>'
       + '</div></div>';
     document.body.insertAdjacentHTML("afterbegin", html);
+    var papeis={};
+    vendedores().then(function(list){
+      var at=list.filter(function(v){return v.ativo;});
+      at.sort(function(a,b){ return (a.papel==="admin")-(b.papel==="admin") || a.nome.localeCompare(b.nome); });
+      at.forEach(function(v){ papeis[v.nome]=v.papel; });
+      document.getElementById("va-nome").innerHTML=at.map(function(v){return '<option value="'+esc(v.nome)+'">'+esc(v.nome)+'</option>';}).join("");
+    }).catch(function(e){
+      document.getElementById("va-nome").innerHTML='<option value="">(sem conexão)</option>';
+      document.getElementById("va-err").textContent="Não consegui carregar a equipe. Recarregue a página.";
+    });
     function tryEnter(){
       var nome=document.getElementById("va-nome").value;
       var pw=document.getElementById("va-pw").value;
-      if(pw===OWNER_KEY){ sessionStorage.setItem("va_user", JSON.stringify({nome:nome, role:ROLES[nome]||"func"})); location.reload(); }
+      if(!nome||!papeis[nome]){ document.getElementById("va-err").textContent="Escolha seu nome"; return; }
+      if(pw===OWNER_KEY){ sessionStorage.setItem("va_user", JSON.stringify({nome:nome, role:papeis[nome]})); location.reload(); }
       else { document.getElementById("va-err").textContent="Senha incorreta"; }
     }
     document.getElementById("va-enter").addEventListener("click", tryEnter);
@@ -74,8 +111,8 @@
   }
 
   var MENU = {
-    func: [["dashboard.html","Meu painel"],["contatos.html","Contatos"],["listagem.html","Listagem"],["relatorios.html","Relatórios"]],
-    admin: [["admin.html","Visão geral"],["parametros.html","Parâmetros"],["contatos.html","Contatos"],["listagem.html","Listagem"],["relatorios.html","Relatórios"]]
+    func: [["dashboard.html","Meu painel"],["contatos.html","Contatos"],["campanha.html","Série Especial"],["listagem.html","Listagem"],["relatorios.html","Relatórios"]],
+    admin: [["admin.html","Visão geral"],["equipe.html","Equipe"],["parametros.html","Parâmetros"],["contatos.html","Contatos"],["campanha.html","Série Especial"],["listagem.html","Listagem"],["relatorios.html","Relatórios"]]
   };
 
   // Monta o menu lateral e retorna o usuario, ou mostra login e retorna null.
@@ -90,8 +127,14 @@
       + itens
       + '<div class="va-foot">'+esc(u.nome)+'<br><button onclick="VA.sair()">sair</button></div></div>';
     document.body.insertAdjacentHTML("afterbegin", side);
+    // usuario desativado (ou removido) perde a sessao
+    vendedores().then(function(list){
+      var ok=list.some(function(v){ return v.nome===u.nome && v.ativo; });
+      if(!ok) sair();
+    }).catch(function(){});
     return u;
   }
 
-  window.VA = { sb:sb, brl:brl, digits:digits, waNum:waNum, esc:esc, user:user, sair:sair, montar:montar };
+  window.VA = { sb:sb, brl:brl, digits:digits, waNum:waNum, esc:esc, user:user, sair:sair, montar:montar,
+    vendedores:vendedores, ativos:ativos, inativos:inativos, optsVend:optsVend, nomesDe:nomesDe };
 })();

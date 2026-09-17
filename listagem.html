@@ -51,7 +51,8 @@ if(u){
     ["total_12m","12 meses","n"],["total_all","Total","n"]
   ];
   var fv=$("#fVend");
-  if(u.role==="admin"){ fv.innerHTML='<option value="">Vendedor</option><option value="__GGE__">Carteira GGE (sem dono)</option><option>Francisco</option><option>Matheus</option><option>Lorena</option>'; }
+  var DONOS=[];   // vendedores ativos (va_vendedores) — opções do seletor de dono
+  if(u.role==="admin"){ fv.innerHTML='<option value="">Vendedor</option><option value="__GGE__">Carteira GGE (sem dono)</option>'; }
   else { fv.innerHTML='<option value="">Vendedor</option><option value="__GGE__">Carteira GGE (sem dono)</option><option value="__MINE__">Meus clientes</option>'; }
 
   window.carregar=async function(){
@@ -102,7 +103,8 @@ if(u){
         if(c[0]==="empresa") return '<td title="'+esc(row.empresa||"")+'">'+fmt(row[c[0]],c[2])+"</td>";
         if(c[0]==="vendedor_dono"){
           var dono=row.vendedor_dono||"GGE";
-          var opts=["GGE","Francisco","Matheus","Lorena"].map(function(o){return '<option'+(o===dono?" selected":"")+'>'+o+'</option>';}).join("");
+          var lst=["GGE"].concat(DONOS); if(lst.indexOf(dono)<0) lst.push(dono);   // dono inativo continua visível até ser trocado
+          var opts=lst.map(function(o){return '<option'+(o===dono?" selected":"")+'>'+o+'</option>';}).join("");
           return '<td><select class="dono" onchange="mudarDono(\''+row.documento+'\',this.value,this)">'+opts+'</select></td>';
         }
         return '<td class="'+(c[2]==="n"?"r":"")+'">'+fmt(row[c[0]],c[2])+"</td>";
@@ -143,7 +145,10 @@ if(u){
   $("#q").addEventListener("keydown",function(e){ if(e.key==="Enter")carregar(); });
   fv.addEventListener("change",carregar);
   $("#fPool").addEventListener("change",carregar);
-  carregar();
+  VA.vendedores().then(function(list){
+    DONOS=VA.ativos(list).map(function(v){return v.nome;});
+    if(u.role==="admin") fv.innerHTML='<option value="">Vendedor</option><option value="__GGE__">Carteira GGE (sem dono)</option>'+VA.optsVend(list,true);
+  }).catch(function(){}).then(function(){ carregar(); });
 }
 </script>
 </body>

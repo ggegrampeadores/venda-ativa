@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d1117'/%3E%3Crect x='2.5' y='2.5' width='59' height='59' rx='12' fill='none' stroke='%2358a6ff' stroke-width='3'/%3E%3Ctext x='32' y='44' font-family='Arial,sans-serif' font-size='32' font-weight='bold' text-anchor='middle' fill='%2358a6ff'%3EVA%3C/text%3E%3C/svg%3E">
+<title>Equipe · Venda Ativa</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .grp{margin-bottom:16px;}
+  .grp h3{font-size:14px;font-weight:600;margin-bottom:2px;}
+  .grp .d{font-size:12px;color:var(--muted);margin-bottom:12px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .row label{font-size:12px;color:var(--muted);}
+  table.tbl td.r, table.tbl th.r{text-align:center;}
+  table.tbl th{cursor:default;}
+  td.v{font-weight:600;}
+  .tag{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted);}
+  .tag.on{border-color:var(--green);color:var(--green);}
+  .tag.adm{border-color:var(--blue);color:var(--blue);}
+  .msg{font-size:13px;margin-top:10px;min-height:18px;}
+  .msg.ok{color:var(--green);} .msg.err{color:var(--red);}
+  .prev{font-size:13px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px;line-height:1.7;}
+  .prev b{color:var(--text);}
+  .btn.red{border-color:var(--red);color:var(--red);}
+  .btn.warn{border-color:var(--yellow);color:var(--yellow);}
+  .btn.sm{font-size:12px;padding:4px 10px;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .muted{color:var(--muted);font-size:12px;}
+</style>
+</head>
+<body>
+<div class="va-content">
+  <div class="va-h1">Equipe</div>
+  <div class="va-sub">Quem usa o sistema, de quem é cada carteira e quem recebe cada lista na fila.</div>
+  <div id="body"><div class="empty">Carregando…</div></div>
+</div>
+<script src="app.js"></script>
+<script>
+var u=VA.montar("equipe.html");
+if(u){
+  var sb=VA.sb, esc=VA.esc, $=function(s){return document.querySelector(s);};
+  var POOL_LBL={segunda_venda_ml:"Leads do Mercado Livre (segunda venda)",ex_francisco:"Ex-Francisco (reativação)",reativacao:"Reativação",toow_ativo:"Toow — ativos",toow_inativo:"Toow — inativos"};
+  var POOLS=Object.keys(POOL_LBL);
+  var SEGS=["Linha Box","Alicates","Grampos Industriais","Pinos","Pregos","Combos","Diversos"];
+  var VL=[], C=[], G=[], R=[], F=[], BL=null, BLerr="";
+
+  if(u.role!=="admin"){ $("#body").innerHTML='<div class="card">Esta página é só do Administrador.</div>'; }
+  else { carregar(); }
+
+  // Busca paginada: a API do Supabase corta em 1000 linhas/requisição
+  async function fetchAll(make){
+    var all=[], from=0, size=1000;
+    while(true){
+      var r=await make().range(from,from+size-1);
+      if(r.error) return {error:r.error};
+      var d=r.data||[]; all=all.concat(d);
+      if(d.length<size) break;
+      from+=size;
+    }
+    return {data:all};
+  }
+  function cnt(arr,key,v){ var n=0; for(var i=0;i<arr.length;i++) if(arr[i][key]===v) n++; return n; }
+  function carteira(v){ return cnt(C,"vendedor_dono",v); }
+  function grupos(v){ return cnt(G,"vendedor_dono",v); }
+  function rotas(v){ return cnt(R,"vendedor",v); }
+  function fila(v){ return cnt(F,"vendedor_alvo",v); }
+  function funcs(){ return VL.filter(function(x){return x.papel==="func";}); }
+
+  async function carregar(keepMsg){
+    try{ VL=await VA.vendedores(true); }
+    catch(e){ $("#body").innerHTML='<div class="card">Erro ao carregar a equipe: '+esc(e.message||e)+'</div>'; return; }
+    var cs=await fetchAll(function(){ return sb.from("va_cliente_status").select("vendedor_dono").not("vendedor_dono","is",null).order("documento"); });
+    var gs=await sb.from("va_grupos").select("grupo_id,vendedor_dono");
+    var rs=await sb.from("va_roteamento").select("pool,segmento,vendedor").order("pool").order("segmento");
+    var fl=await fetchAll(function(){ return sb.from("vw_fila").select("vendedor_alvo").lt("bucket",9).order("documento"); });
+    if(cs.error||gs.error||rs.error){ $("#body").innerHTML='<div class="card">Erro: '+esc((cs.error||gs.error||rs.error).message)+'</div>'; return; }
+    C=cs.data||[]; G=gs.data||[]; R=rs.data||[]; F=(fl.data||[]);
+    render(keepMsg);
+    carregarBling();
+  }
+
+  function render(keepMsg){
+    var msgs={}; if(keepMsg){ ["mNovo","mMig","mRot","mEq"].forEach(function(id){ var e=document.getElementById(id); if(e) msgs[id]=[e.className,e.textContent]; }); }
+
+    // ---- 1. Equipe
+    var ord=VL.slice().sort(function(a,b){ return (b.ativo-a.ativo) || ((a.papel==="admin")-(b.papel==="admin")) || a.nome.localeCompare(b.nome); });
+    var linhas=ord.map(function(v){
+      var adm=v.papel==="admin";
+      var st=v.ativo?'<span class="tag on">ativo</span>':'<span class="tag">inativo</span>';
+      var pend=carteira(v.nome)+grupos(v.nome)+rotas(v.nome);
+      var acao="";
+      if(v.nome===u.nome) acao='<span class="muted">você</span>';
+      else if(v.ativo) acao='<button class="btn sm red" onclick="desativar(\''+esc(v.nome)+'\',this)">Desativar</button>';
+      else acao='<button class="btn sm" onclick="reativar(\''+esc(v.nome)+'\')">Reativar</button>';
+      var herda=(v.herda_de&&v.herda_de.length)?'<span class="muted">herdou de '+esc(v.herda_de.join(", "))+'</span>':'';
+      return '<tr><td class="v">'+esc(v.nome)+' '+(adm?'<span class="tag adm">admin</span>':'')+'</td><td>'+st+'</td>'
+        +'<td class="r">'+(adm?"—":carteira(v.nome))+'</td><td class="r">'+(adm?"—":grupos(v.nome))+'</td><td class="r">'+(adm?"—":fila(v.nome))+'</td>'
+        +'<td>'+herda+(!v.ativo&&pend?' <span style="color:var(--yellow);font-size:12px;">⚠ ainda tem carteira/roteamento — migre abaixo</span>':'')+'</td>'
+        +'<td style="text-align:right">'+acao+'</td></tr>';
+    }).join("");
+    var equipe='<div class="card grp"><h3>Quem usa o sistema</h3><div class="d">Os nomes ativos aparecem no login e em todos os seletores. Ninguém é apagado: desativar tira do login, mas o histórico (contatos, relatórios) continua no nome da pessoa.</div>'
+      +'<div style="overflow:auto"><table class="tbl"><thead><tr><th>Nome</th><th>Situação</th><th class="r">Clientes (dono)</th><th class="r">Grupos</th><th class="r">Na fila</th><th></th><th></th></tr></thead><tbody>'+linhas+'</tbody></table></div>'
+      +'<div class="msg" id="mEq"></div></div>';
+
+    // ---- 2. Novo usuário
+    var novo='<div class="card grp"><h3>Novo usuário</h3><div class="d">Entra com a mesma senha da casa. Vendedor novo começa com os parâmetros padrão — ajuste em Parâmetros — e sem carteira: use a migração abaixo ou a Listagem para passar clientes.</div>'
+      +'<div class="row"><input type="text" id="nNome" placeholder="Nome (como aparece no login)" maxlength="30" style="min-width:240px">'
+      +'<select id="nPapel"><option value="func">Vendedor</option><option value="admin">Administrador</option></select>'
+      +'<button class="btn green" onclick="criar()">Criar</button></div><div class="msg" id="mNovo"></div></div>';
+
+    // ---- 3. Migrar carteira
+    var de=funcs().filter(function(v){ return carteira(v.nome)+grupos(v.nome)+rotas(v.nome)>0 || v.ativo; });
+    var deOpts='<option value="">De…</option>'+de.map(function(v){ return '<option value="'+esc(v.nome)+'">'+esc(v.nome)+(v.ativo?"":" (inativo)")+'</option>'; }).join("");
+    var paraOpts='<option value="">Para…</option>'+VA.optsVend(VL,false);
+    var mig='<div class="card grp"><h3>Migrar carteira de uma pessoa para outra</h3><div class="d">Passa de uma vez: clientes em que a pessoa é dona (com compromissos e lembretes), grupos econômicos, as regras de roteamento da fila e os parâmetros (se o destino ainda não tiver). O destino também herda as recusas e os “agora não” da origem, para a fila não repetir quem já foi descartado. O histórico de contatos não é reescrito.</div>'
+      +'<div class="row"><select id="mDe" onchange="previa()">'+deOpts+'</select><span class="muted">→</span><select id="mPara" onchange="previa()">'+paraOpts+'</select>'
+      +'<label><input type="checkbox" id="mDes" checked> desativar a origem depois</label>'
+      +'<button class="btn warn" id="mBtn" onclick="migrar()" disabled>Migrar</button></div>'
+      +'<div id="mPrev"></div><div class="msg" id="mMig"></div></div>';
+
+    // ---- 4. Roteamento
+    var rLinhas=R.map(function(x){
+      var sel='<select onchange="mudarRota(\''+esc(x.pool)+'\',\''+esc(x.segmento)+'\',this)">'+rotaOpts(x.vendedor)+'</select>';
+      var del=(x.segmento==="*")?'':'<button class="btn sm" title="remover esta exceção" onclick="delRota(\''+esc(x.pool)+'\',\''+esc(x.segmento)+'\')">remover</button>';
+      return '<tr><td>'+esc(POOL_LBL[x.pool]||x.pool)+'</td><td>'+(x.segmento==="*"?'<span class="muted">todos os demais</span>':esc(x.segmento))+'</td><td>'+sel+'</td><td style="text-align:right">'+del+'</td></tr>';
+    }).join("");
+    var rot='<div class="card grp"><h3>Roteamento da fila</h3><div class="d">Para quem vai cada lista <b>quando o cliente não tem dono</b>. Dono do grupo e dono do cliente sempre vencem. Uma linha por segmento é exceção; “todos os demais” é a regra geral da lista.</div>'
+      +'<div style="overflow:auto"><table class="tbl"><thead><tr><th>Lista</th><th>Segmento</th><th>Vai para</th><th></th></tr></thead><tbody>'+rLinhas+'</tbody></table></div>'
+      +'<div class="row" style="margin-top:12px;"><span class="muted">Nova exceção:</span>'
+      +'<select id="rPool">'+POOLS.map(function(p){return '<option value="'+p+'">'+esc(POOL_LBL[p])+'</option>';}).join("")+'</select>'
+      +'<select id="rSeg">'+SEGS.map(function(s){return '<option>'+esc(s)+'</option>';}).join("")+'</select>'
+      +'<select id="rVend">'+VA.optsVend(VL,false)+'</select>'
+      +'<button class="btn" onclick="addRota()">Adicionar</button></div><div class="msg" id="mRot"></div></div>';
+
+    // ---- 5. Bling
+    var bling='<div class="card grp"><h3>Vínculo com o Bling</h3><div class="d">Liga o vendedor cadastrado no Bling ao nome do CRM — é o que carimba o vendedor nos pedidos (coleta diária). Vendedor novo no CRM precisa estar cadastrado como vendedor no Bling e vinculado aqui.</div><div id="blingBody"><div class="muted">Consultando o Bling…</div></div><div class="msg" id="mBl"></div></div>';
+
+    $("#body").innerHTML=equipe+novo+mig+rot+bling;
+    Object.keys(msgs).forEach(function(id){ var e=document.getElementById(id); if(e){ e.className=msgs[id][0]; e.textContent=msgs[id][1]; } });
+    if(BL||BLerr) renderBling();
+  }
+  function rotaOpts(atual){
+    var h=VA.optsVend(VL,false);
+    var ok=VA.ativos(VL).some(function(v){return v.nome===atual;});
+    if(!ok) h='<option value="'+esc(atual)+'" selected>'+esc(atual)+' (inativo)</option>'+h;
+    else h=h.replace('value="'+esc(atual)+'"','value="'+esc(atual)+'" selected');
+    return h;
+  }
+  function msg(id,txt,kind){ var e=document.getElementById(id); if(e){ e.className="msg "+(kind||""); e.textContent=txt; } }
+
+  // ---------- Novo usuário
+  window.criar=async function(){
+    var nome=($("#nNome").value||"").replace(/\s+/g," ").trim(), papel=$("#nPapel").value;
+    if(nome.length<2){ msg("mNovo","Digite o nome.","err"); return; }
+    if(/['"<>&;\\]/.test(nome)){ msg("mNovo","Use só letras, números e espaço no nome.","err"); return; }
+    if(nome.toLowerCase()==="gge"){ msg("mNovo","“GGE” é reservado para a carteira sem dono.","err"); return; }
+    var dup=VL.filter(function(v){ return v.nome.toLowerCase()===nome.toLowerCase(); })[0];
+    if(dup){ msg("mNovo",dup.ativo?"Já existe um usuário com esse nome.":"Esse nome já existe e está inativo — use Reativar na lista acima.","err"); return; }
+    var r=await sb.from("va_vendedores").insert({nome:nome,papel:papel});
+    if(r.error){ msg("mNovo","Erro: "+r.error.message,"err"); return; }
+    await carregar(); msg("mNovo","✓ "+nome+" criado. Já aparece no login.","ok");
+  };
+
+  // ---------- Desativar / reativar
+  var armado={};
+  window.desativar=async function(nome,btn){
+    var pend=carteira(nome)+grupos(nome)+rotas(nome);
+    if(pend){ msg("mEq",nome+" ainda é dono de "+carteira(nome)+" clientes, "+grupos(nome)+" grupos e "+rotas(nome)+" regras de roteamento. Migre a carteira (abaixo) antes — a migração já desativa.","err"); return; }
+    var adminsAtivos=VL.filter(function(v){return v.papel==="admin"&&v.ativo;});
+    var alvo=VL.filter(function(v){return v.nome===nome;})[0];
+    if(alvo&&alvo.papel==="admin"&&adminsAtivos.length<=1){ msg("mEq","Precisa sobrar pelo menos um Administrador ativo.","err"); return; }
+    if(!armado[nome]){ armado[nome]=1; btn.textContent="Confirmar?"; setTimeout(function(){ armado[nome]=0; if(btn.isConnected) btn.textContent="Desativar"; },4000); return; }
+    var r=await sb.from("va_vendedores").update({ativo:false,desativado_em:new Date().toISOString()}).eq("nome",nome);
+    if(r.error){ msg("mEq","Erro: "+r.error.message,"err"); return; }
+    await carregar(); msg("mEq","✓ "+nome+" desativado — saiu do login; histórico preservado.","ok");
+  };
+  window.reativar=async function(nome){
+    var r=await sb.from("va_vendedores").update({ativo:true,desativado_em:null}).eq("nome",nome);
+    if(r.error){ msg("mEq","Erro: "+r.error.message,"err"); return; }
+    await carregar(); msg("mEq","✓ "+nome+" reativado.","ok");
+  };
+
+  // ---------- Migração
+  var migArmado=false;
+  window.previa=function(){
+    migArmado=false; $("#mBtn").textContent="Migrar"; msg("mMig","");
+    var de=$("#mDe").value, para=$("#mPara").value, ok=de&&para&&de!==para;
+    $("#mBtn").disabled=!ok;
+    if(!de){ $("#mPrev").innerHTML=""; return; }
+    var h='<div class="prev">De <b>'+esc(de)+'</b>: <b>'+carteira(de)+'</b> clientes · <b>'+grupos(de)+'</b> grupos econômicos · <b>'+rotas(de)+'</b> regras de roteamento · <b>'+fila(de)+'</b> fichas na fila hoje.';
+    if(para&&para!==de) h+='<br>Hoje <b>'+esc(para)+'</b> tem '+carteira(para)+' clientes e '+fila(para)+' fichas na fila → ficará com cerca de <b>'+(carteira(para)+carteira(de))+'</b> clientes e <b>'+(fila(para)+fila(de))+'</b> na fila.';
+    if(para&&para===de) h+='<br><span style="color:var(--red)">Origem e destino são a mesma pessoa.</span>';
+    $("#mPrev").innerHTML=h+'</div>';
+  };
+  window.migrar=async function(){
+    var de=$("#mDe").value, para=$("#mPara").value, des=$("#mDes").checked;
+    if(!de||!para||de===para) return;
+    if(!migArmado){ migArmado=true; $("#mBtn").textContent="Confirmar: "+de+" → "+para; return; }
+    $("#mBtn").disabled=true; $("#mBtn").textContent="Migrando…";
+    var r=await sb.rpc("va_migrar_carteira",{p_de:de,p_para:para,p_desativar:des});
+    migArmado=false;
+    if(r.error){ $("#mBtn").disabled=false; $("#mBtn").textContent="Migrar"; msg("mMig","Erro: "+r.error.message,"err"); return; }
+    var d=r.data||{};
+    await carregar();
+    msg("mMig","✓ "+de+" → "+para+": "+(d.clientes||0)+" clientes, "+(d.grupos||0)+" grupos, "+(d.roteamentos||0)+" regras de roteamento, "+(d.parametros||0)+" blocos de parâmetros."+(des?" "+de+" foi desativado.":""),"ok");
+  };
+
+  // ---------- Roteamento
+  window.mudarRota=async function(pool,seg,el){
+    el.disabled=true;
+    var r=await sb.from("va_roteamento").update({vendedor:el.value,atualizado_em:new Date().toISOString()}).eq("pool",pool).eq("segmento",seg);
+    el.disabled=false;
+    if(r.error){ msg("mRot","Erro: "+r.error.message,"err"); return; }
+    await carregar(); msg("mRot","✓ Roteamento atualizado — a fila já reflete.","ok");
+  };
+  window.addRota=async function(){
+    var pool=$("#rPool").value, seg=$("#rSeg").value, v=$("#rVend").value;
+    if(!v){ msg("mRot","Escolha o vendedor.","err"); return; }
+    var r=await sb.from("va_roteamento").upsert({pool:pool,segmento:seg,vendedor:v,atualizado_em:new Date().toISOString()},{onConflict:"pool,segmento"});
+    if(r.error){ msg("mRot","Erro: "+r.error.message,"err"); return; }
+    await carregar(); msg("mRot","✓ Exceção gravada.","ok");
+  };
+  window.delRota=async function(pool,seg){
+    if(seg==="*") return;
+    var r=await sb.from("va_roteamento").delete().eq("pool",pool).eq("segmento",seg);
+    if(r.error){ msg("mRot","Erro: "+r.error.message,"err"); return; }
+    await carregar(); msg("mRot","✓ Exceção removida — esse segmento volta para a regra geral da lista.","ok");
+  };
+
+  // ---------- Bling
+  async function carregarBling(){
+    var r=await sb.rpc("va_bling_listar_vendedores");
+    if(r.error){ BL=null; BLerr=r.error.message; } else { BL=r.data||[]; BLerr=""; }
+    renderBling();
+  }
+  function renderBling(){
+    var el=document.getElementById("blingBody"); if(!el) return;
+    if(BLerr){ el.innerHTML='<div class="muted">Não consegui consultar o Bling agora ('+esc(BLerr)+'). O resto da página funciona normalmente.</div>'; return; }
+    var nomes=funcs().map(function(v){return v.nome;});
+    el.innerHTML='<div style="overflow:auto"><table class="tbl"><thead><tr><th>Vendedor no Bling</th><th>Vinculado a (CRM)</th></tr></thead><tbody>'
+      +BL.map(function(b){
+        var opts='<option value="">— não vinculado —</option>'+nomes.map(function(n){ return '<option value="'+esc(n)+'"'+(n===b.vinculado_a?" selected":"")+'>'+esc(n)+'</option>'; }).join("");
+        return '<tr><td>'+esc(b.nome_bling||b.vendedor_id)+'</td><td><select onchange="vincular(\''+b.vendedor_id+'\',this)">'+opts+'</select></td></tr>';
+      }).join("")+'</tbody></table></div>';
+  }
+  window.vincular=async function(id,el){
+    el.disabled=true;
+    var r=await sb.rpc("va_bling_vincular",{p_vendedor_id:id,p_nome:el.value||null});
+    el.disabled=false;
+    if(r.error){ msg("mBl","Erro: "+r.error.message,"err"); return; }
+    msg("mBl","✓ Vínculo atualizado — vale a partir da próxima coleta de pedidos.","ok");
+  };
+}
+</script>
+</body>
+</html>

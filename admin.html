@@ -58,14 +58,18 @@ if(u){
     var totLead=C.filter(function(x){return x.status==="lead";}).length;
     var filaHoje=F.length;
 
-    var vends=["Francisco","Matheus","Lorena"];
+    var VL=[]; try{ VL=await VA.vendedores(); }catch(e){}
     function carteira(v){ return C.filter(function(x){return x.vendedor_dono===v && x.status==="cliente";}).length; }
     function fila(v){ return F.filter(function(x){return x.vendedor_alvo===v;}).length; }
     function tarefas(v){ return I.filter(function(x){return x.vendedor===v;}).length; }
     function efetivos(v){ return I.filter(function(x){return x.vendedor===v && x.resultado && x.resultado!=="nao_atendeu";}).length; }
 
-    var linhas=vends.map(function(v){
-      return '<tr><td class="v">'+v+'</td><td class="r">'+carteira(v)+'</td><td class="r">'+fila(v)+'</td><td class="r">'+tarefas(v)+'</td><td class="r" style="color:var(--green)">'+efetivos(v)+'</td></tr>';
+    // ativos sempre; inativos só se ainda têm carteira, fila ou tarefa no mês (sinal de migração pendente / histórico)
+    var vends=VA.ativos(VL).map(function(x){return x.nome;});
+    var inat=VA.inativos(VL).map(function(x){return x.nome;}).filter(function(v){ return carteira(v)||fila(v)||tarefas(v); });
+    var linhas=vends.concat(inat).map(function(v){
+      var tag=inat.indexOf(v)>=0?' <span style="color:var(--muted);font-weight:400;font-size:11px;">(inativo)</span>':'';
+      return '<tr><td class="v">'+esc(v)+tag+'</td><td class="r">'+carteira(v)+'</td><td class="r">'+fila(v)+'</td><td class="r">'+tarefas(v)+'</td><td class="r" style="color:var(--green)">'+efetivos(v)+'</td></tr>';
     }).join("");
     var carteiraGGE=C.filter(function(x){return !x.vendedor_dono && x.status==="cliente";}).length;
     linhas+='<tr><td class="v" style="color:var(--muted)">Carteira GGE</td><td class="r">'+carteiraGGE+'</td><td class="r">—</td><td class="r">—</td><td class="r">—</td></tr>';

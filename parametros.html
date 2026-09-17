@@ -39,9 +39,10 @@ if(u){
   var sb=VA.sb, esc=VA.esc, $=function(s){return document.querySelector(s);};
   if(u.role!=="admin"){ $("#body").innerHTML='<div class="card">Esta página é só do Administrador.</div>'; }
   else {
-    var VENDS=["Francisco","Matheus","Lorena"];
+    var VENDS=[];          // vendedores ativos (va_vendedores)
+    var P0={};             // parâmetros como estão no banco — preserva os de vendedores inativos ao salvar
     var SEGS=["Linha Box","Alicates","Grampos Industriais","Pinos","Pregos","Combos","Diversos"];
-    var vend="Francisco";
+    var vend="";
     var M={meta:{},mix:{},rank:{},seg:{},pisos:{},glob:{}};
     var DEF_MIX={recompra:40,reativar:30,lead:30};
     var DEF_RANK={timing:40,valor:30,ja_cliente:30};
@@ -68,11 +69,16 @@ if(u){
 
     load();
     async function load(){
+      try{ VENDS=VA.ativos(await VA.vendedores()).map(function(v){return v.nome;}); }
+      catch(e){ $("#body").innerHTML='<div class="card">Erro ao carregar a equipe: '+esc(e.message||e)+'</div>'; return; }
+      if(!VENDS.length){ $("#body").innerHTML='<div class="card">Nenhum vendedor ativo. Crie um em <a href="equipe.html" style="color:var(--blue)">Equipe</a>.</div>'; return; }
+      vend=VENDS[0];
       var r=await sb.from("va_parametros").select("chave,valor");
       if(r.error){ $("#body").innerHTML='<div class="card">Erro: '+r.error.message+'</div>'; return; }
       var P={}; (r.data||[]).forEach(function(row){ P[row.chave]=row.valor; });
+      P0=P;
       var md=P.meta_diaria||{};
-      M.meta={Francisco:num(md.Francisco,18),Matheus:num(md.Matheus,30),Lorena:num(md.Lorena,30)};
+      M.meta={}; VENDS.forEach(function(v){ M.meta[v]=num(md[v],30); });
       M.mix=perVend(P.mix_fila,["recompra","reativar","lead"],DEF_MIX);
       M.rank=perVend(P.pesos_ranking,["timing","valor","ja_cliente"],DEF_RANK);
       M.pisos=perVend(P.pisos_valor,["recompra","reativar","lead"],DEF_PISO);
@@ -116,7 +122,7 @@ if(u){
           return '<td><input type="number" min="0" max="10" value="'+M.seg[v][s]+'" oninput="setSeg(\''+v+'\',\''+esc(s)+'\',this.value)"></td>';
         }).join("")+'</tr>';
       }).join("");
-      var matriz='<div class="card grp"><h3>Peso por segmento × vendedor</h3><div class="d">0 a 10. Quanto maior, mais alto aquele segmento sobe na fila do vendedor. Ex.: Alicates 9 na Lorena, Linha Box 9 no Matheus.</div>'
+      var matriz='<div class="card grp"><h3>Peso por segmento × vendedor</h3><div class="d">0 a 10. Quanto maior, mais alto aquele segmento sobe na fila do vendedor. Ex.: Alicates 9 para um vendedor, Linha Box 9 para outro.</div>'
         +'<table class="mtx"><thead>'+mtxHead+'</thead><tbody>'+mtxRows+'</tbody></table>'
         +'<div class="hint">Vale para todos os vendedores ao mesmo tempo — edite a coluna de cada um.</div></div>';
 
@@ -133,12 +139,19 @@ if(u){
 
     window.salvar=async function(){
       var ts=new Date().toISOString();
+      // mantém no banco os parâmetros de quem não está na tela (vendedores inativos) — histórico/volta futura
+      function keep(chave,novo){
+        var old=P0[chave], out={};
+        if(old && typeof old==="object"){ Object.keys(old).forEach(function(k){ if(old[k]!==null && (typeof old[k]==="object" || chave==="meta_diaria") && VENDS.indexOf(k)<0) out[k]=old[k]; }); }
+        Object.keys(novo).forEach(function(k){ out[k]=novo[k]; });
+        return out;
+      }
       var rows=[
-        {chave:"meta_diaria",valor:M.meta,atualizado_em:ts},
-        {chave:"mix_fila",valor:M.mix,atualizado_em:ts},
-        {chave:"pesos_ranking",valor:M.rank,atualizado_em:ts},
-        {chave:"pisos_valor",valor:M.pisos,atualizado_em:ts},
-        {chave:"pesos_segmento",valor:M.seg,atualizado_em:ts},
+        {chave:"meta_diaria",valor:keep("meta_diaria",M.meta),atualizado_em:ts},
+        {chave:"mix_fila",valor:keep("mix_fila",M.mix),atualizado_em:ts},
+        {chave:"pesos_ranking",valor:keep("pesos_ranking",M.rank),atualizado_em:ts},
+        {chave:"pisos_valor",valor:keep("pisos_valor",M.pisos),atualizado_em:ts},
+        {chave:"pesos_segmento",valor:keep("pesos_segmento",M.seg),atualizado_em:ts},
         {chave:"recompra_default_dias",valor:M.glob.recompra_default_dias,atualizado_em:ts},
         {chave:"digital_tentativas",valor:M.glob.digital_tentativas,atualizado_em:ts},
         {chave:"digital_dias",valor:M.glob.digital_dias,atualizado_em:ts},

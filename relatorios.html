@@ -47,7 +47,11 @@ if(u){
   var MODO="semana";
   var POOL_LBL={cliente:"Clientes",prospect:"Prospects",lead:"Leads"};
   var fv=$("#selV");
-  if(u.role==="admin"){ fv.style.display="block"; fv.innerHTML='<option value="">Todos</option><option>Francisco</option><option>Matheus</option><option>Lorena</option>'; }
+  var VLIST=[];
+  if(u.role==="admin"){
+    fv.style.display="block"; fv.innerHTML='<option value="">Todos</option>';
+    VA.vendedores().then(function(list){ VLIST=list; var cur=fv.value; fv.innerHTML='<option value="">Todos</option>'+VA.optsVend(list,true); fv.value=cur; }).catch(function(){});
+  }
   var meses=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
   (function(){ var s=$("#selMes"), now=new Date();
     for(var i=0;i<6;i++){ var d=new Date(now.getFullYear(),now.getMonth()-i,1); s.innerHTML+='<option value="'+d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,"0")+'">'+meses[d.getMonth()]+"/"+d.getFullYear()+'</option>'; }
@@ -124,8 +128,11 @@ if(u){
 
     var perV="";
     if(u.role==="admin" && !alvo){
-      var vs=["Francisco","Matheus","Lorena"], linhas="";
+      if(!VLIST.length){ try{ VLIST=await VA.vendedores(); }catch(e){} }
+      var atv=VA.ativos(VLIST).map(function(x){return x.nome;}), vs=atv.concat(VA.inativos(VLIST).map(function(x){return x.nome;})), linhas="";
       for(var i=0;i<vs.length;i++){ var mv=await funil(vs[i],ini,fim); var tv=somaF(mv);
+        // inativo só aparece se teve movimento no período (semanas antigas)
+        if(atv.indexOf(vs[i])<0 && !(tv.propostos||tv.contactados||tv.receberam_proposta||tv.vendas)) continue;
         linhas+='<tr><td class="v">'+vs[i]+'</td><td class="r">'+tv.propostos+'</td><td class="r">'+tv.contactados+'</td><td class="r">'+tv.receberam_proposta+'</td><td class="r" style="color:var(--green)">'+tv.vendas+'</td></tr>'; }
       perV='<div class="card" style="margin-top:16px;"><h3 class="sec">Por vendedor</h3><table class="tbl"><thead><tr><th>Vendedor</th><th class="r">Propostos</th><th class="r">Contactados</th><th class="r">Receberam proposta</th><th class="r">Vendas</th></tr></thead><tbody>'+linhas+'</tbody></table></div>';
     }

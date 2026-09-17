@@ -217,7 +217,8 @@ if(u){
 
   // seletor de vendedor: vendedor ve so a propria fila; admin escolhe.
   var selV=$("#selVend");
-  if(u.role==="admin"){ selV.innerHTML='<option value="">Todos</option><option>Francisco</option><option>Matheus</option><option>Lorena</option>'; }
+  var VLIST=[];   // equipe (va_vendedores) — carregada no init, antes da 1ª fila
+  if(u.role==="admin"){ selV.innerHTML='<option value="">Todos</option>'; }
   else { selV.innerHTML='<option>'+esc(u.nome)+'</option>'; selV.value=u.nome; selV.disabled=true; }
 
   window.carregar=async function(){
@@ -235,6 +236,7 @@ if(u){
     SNOOZE_DIAS=num(PARAMS.agora_nao_dias,3); FEITAS=0;
     REC={excl:{},segHoje:{},ticketMax:{recompra:0,reativar:0,lead:0}};
     if(v){
+      NOMES=VA.nomesDe(VLIST,v);   // o vendedor + antecessores de quem herdou a carteira
       var snz=await fetchAdiados(v); FEITAS=await fetchFeitas(v);
       rows=rows.filter(function(f){ return !snz[f.documento]; });   // tira adiados ("agora não") da janela
       await aplicarRecusas(v,rows);                                  // exclusões + aprendizado (REC)
@@ -260,21 +262,22 @@ if(u){
         +'<button class="x" title="dispensar" onclick="this.parentNode.remove();sessionStorage.setItem(\'va_sexta_ok\',\'1\')">×</button></div>';
     }
   })();
+  var NOMES=[];
   function inicioDoDia(){ var d=new Date(); d.setHours(0,0,0,0); return d.toISOString(); }
   async function fetchFeitas(vend){
-    var r=await sb.from("va_interacoes").select("documento,resultado,data").eq("vendedor",vend).gte("data",inicioDoDia());
+    var r=await sb.from("va_interacoes").select("documento,resultado,data").in("vendedor",NOMES.length?NOMES:[vend]).gte("data",inicioDoDia());
     var s={}; (r.data||[]).forEach(function(x){ if(x.resultado!=="agora_nao"&&x.resultado!=="recusado") s[x.documento]=1; }); return Object.keys(s).length;
   }
   async function fetchAdiados(vend){
     var since=new Date(); since.setDate(since.getDate()-SNOOZE_DIAS);
-    var r=await sb.from("va_interacoes").select("documento,data").eq("vendedor",vend).eq("resultado","agora_nao").gte("data",since.toISOString());
+    var r=await sb.from("va_interacoes").select("documento,data").in("vendedor",NOMES.length?NOMES:[vend]).eq("resultado","agora_nao").gte("data",since.toISOString());
     var s={}; (r.data||[]).forEach(function(x){ s[x.documento]=1; }); return s;
   }
   // Recusas do vendedor: janela de 90d cobre todos os motivos temporários; nao_quero_lead vem sem limite de data (definitivo).
   async function aplicarRecusas(vend,rows){
     var since=new Date(); since.setDate(since.getDate()-90);
     var r=await sb.from("va_interacoes").select("documento,motivo,data")
-      .eq("vendedor",vend).eq("resultado","recusado")
+      .in("vendedor",NOMES.length?NOMES:[vend]).eq("resultado","recusado")
       .or("motivo.eq.nao_quero_lead,data.gte."+since.toISOString());
     if(r.error||!r.data||!r.data.length) return;
     var byDoc={}; rows.forEach(function(f){ byDoc[f.documento]=f; });
@@ -460,7 +463,17 @@ if(u){
   });
   $("#selSeg").addEventListener("change",carregar);
   if(u.role==="admin") selV.addEventListener("change",carregar);
-  (async function(){ try{ var p=await sb.from("va_parametros").select("chave,valor"); (p.data||[]).forEach(function(x){ PARAMS[x.chave]=x.valor; }); }catch(e){} carregar(); })();
+  (async function(){ try{ var p=await sb.from("va_parametros").select("chave,valor"); (p.data||[]).forEach(function(x){ PARAMS[x.chave]=x.valor; }); }catch(e){}
+    try{ VLIST=await VA.vendedores(); if(u.role==="admin") selV.innerHTML='<option value="">Todos</option>'+VA.optsVend(VLIST,false); }catch(e){}
+    await carregar();
+    // veio da Série Especial (campanha.html?doc=…): abre a ficha direto e oferece o caminho de volta
+    var qs=new URLSearchParams(location.search), qd=qs.get("doc");
+    if(qd){
+      var sid=qs.get("serie");
+      $("#sexta").insertAdjacentHTML("beforeend",'<div class="sextaB">⭐ Contato da Série Especial — registre o resultado na ficha ao lado. <a href="campanha.html'+(sid?"?id="+encodeURIComponent(sid):"")+'">← Voltar à série</a></div>');
+      abrirFicha(qd);
+    }
+  })();
 }
 </script>
 </body>
