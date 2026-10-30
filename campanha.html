@@ -140,6 +140,15 @@ if(u){
     if(!ITENS.length) trab=0;
     function seg(k,v){ return v?'<span class="'+k+'" style="width:'+(v/n*100)+'%"></span>':''; }
     var apelo=c.apelo?'<div class="card apelo"><div class="t">Abordagem desta série</div>'+esc(c.apelo)+'</div>':'';
+    // Mensagem de WhatsApp da série: o botão "WhatsApp" de cada contato abre a conversa já com este texto colado.
+    // Campos: {empresa} e {cidade} são trocados pelos dados do contato.
+    var msgBox='<div class="card apelo"><div class="t">Mensagem de WhatsApp desta série</div>'
+      +(c.mensagem?'<div style="white-space:pre-wrap">'+esc(c.mensagem)+'</div>':'<div class="va-sub">Ainda sem texto — o botão abre a conversa em branco.</div>')
+      +(u.role==="admin"&&!c.encerrada_em?'<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--blue)">Editar texto</summary>'
+        +'<textarea id="msgTxt" rows="6" style="width:100%;margin-top:6px;box-sizing:border-box">'+esc(c.mensagem||"")+'</textarea>'
+        +'<div class="va-sub">Pode usar {empresa} e {cidade}. O texto vai colado no WhatsApp; o vendedor só confere e envia.</div>'
+        +'<button class="btn green sm" onclick="salvarMsg()">Salvar mensagem</button> <span id="msgOk" class="va-sub"></span></details>':'')
+      +'</div>';
     var head='<div class="mrow">'
       +'<div class="metric"><div class="lbl">Trabalhados</div><div class="val">'+trab+' <span style="font-size:14px;color:var(--muted)">/ '+ITENS.length+'</span></div></div>'
       +'<div class="metric"><div class="lbl">A fazer</div><div class="val">'+(nA+nT)+'</div></div>'
@@ -164,12 +173,25 @@ if(u){
         +'<div class="meta">'+esc(x.segmento||"—")+' · '+esc(x.municipio||"")+(x.uf?"/"+esc(x.uf):"")+(extra.length?' · <span style="color:var(--text)">'+esc(extra.join(" · "))+'</span>':'')+'</div>'
         +'<div class="why">'+esc(x.motivo||"")+'</div></div>'
         +'<div class="acts"><span class="et et-'+x.etapa+'">'+ET_LBL[x.etapa]+'</span>'
-        +(x.celular?'<a class="btn sm wa" target="_blank" href="https://wa.me/'+waNum(x.celular)+'">WhatsApp</a>':(fone?'<span class="meta">'+esc(fone)+'</span>':''))
+        +(x.celular?'<a class="btn sm wa" target="_blank" href="'+waLink(x,c)+'">WhatsApp</a>':(fone?'<span class="meta">'+esc(fone)+'</span>':''))
         +'<a class="btn sm blue" href="contatos.html?doc='+encodeURIComponent(x.documento)+'&serie='+CID+'">Abrir ficha</a></div></div>';
     }).join(""):'<div class="empty">'+(FILTRO==="abertos"?"Série concluída — todos os contatos foram trabalhados. 🎯":"Nada aqui ainda.")+'</div>';
     var rod='<div class="va-sub" style="margin-top:14px;">O andamento é automático: “contactado” vem do registro na ficha; “proposta” e “venda” vêm dos pedidos do Bling lançados depois do início da série (atualiza com a coleta diária).</div>';
-    $("#body").innerHTML=apelo+head+chips+lista+rod;
+    $("#body").innerHTML=apelo+msgBox+head+chips+lista+rod;
   }
+  // link wa.me com o texto da série preenchido ({empresa}, {cidade})
+  function waLink(x,c){
+    var url="https://wa.me/"+waNum(x.celular);
+    if(!c||!c.mensagem) return url;
+    var t=c.mensagem.replace(/\{empresa\}/g, x.empresa||"").replace(/\{cidade\}/g, x.municipio||"");
+    return url+"?text="+encodeURIComponent(t);
+  }
+  window.salvarMsg=async function(){
+    var t=($("#msgTxt").value||"").trim();
+    var r=await sb.from("va_campanhas").update({mensagem:t||null}).eq("id",CID);
+    var ok=$("#msgOk"); if(r.error){ ok.textContent="Erro: "+r.error.message; return; }
+    camp(CID).mensagem=t||null; ok.textContent="Salvo."; render();
+  };
 
   // ---------- Admin: nova série / encerrar
   async function renderAdmin(){
