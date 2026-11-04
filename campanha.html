@@ -143,14 +143,18 @@ if(u){
     // Mensagens de WhatsApp da série: uma por grupo (segmento do contato, ex.: "Alicate P6C-8") ou uma geral.
     // O botão "WhatsApp" de cada contato abre a conversa já com o texto do grupo dele. {empresa} e {cidade} são trocados.
     var GRUPOS=[]; ITENS.forEach(function(x){ var g=grupoDe(x); if(g&&GRUPOS.indexOf(g)<0) GRUPOS.push(g); }); GRUPOS.sort();
-    var MS=c.mensagens||{};
-    function bloco(k,lbl){ var t=(k==="*")?c.mensagem:MS[k];
-      return '<div style="margin-top:8px"><b>'+esc(lbl)+'</b>'+(t?'<div style="white-space:pre-wrap">'+esc(t)+'</div>':'<div class="va-sub">sem texto — o botão abre a conversa em branco</div>')
-        +(u.role==="admin"&&!c.encerrada_em?'<details><summary style="cursor:pointer;color:var(--blue)">Editar</summary><textarea data-k="'+esc(k)+'" class="msgTxt" rows="5" style="width:100%;margin-top:6px;box-sizing:border-box">'+esc(t||"")+'</textarea></details>':'')+'</div>'; }
-    var msgBox='<div class="card apelo"><div class="t">Mensagem de WhatsApp</div>'
+    var MAXM=4;
+    function bloco(k,lbl){ var L=msgsDe(c,k,true);
+      var view=L.length?L.map(function(t,i){ return '<div style="margin-top:4px"><span class="meta">Mensagem '+(i+1)+'</span><div style="white-space:pre-wrap">'+esc(t)+'</div></div>'; }).join(""):'<div class="va-sub">sem texto — o botão abre a conversa em branco</div>';
+      var ed='';
+      if(u.role==="admin"&&!c.encerrada_em){ ed='<details><summary style="cursor:pointer;color:var(--blue)">Editar</summary>';
+        for(var i=0;i<MAXM;i++) ed+='<div class="meta" style="margin-top:6px">Mensagem '+(i+1)+(i?' (opcional)':'')+'</div><textarea data-k="'+esc(k)+'" data-i="'+i+'" class="msgTxt" rows="4" style="width:100%;box-sizing:border-box">'+esc(L[i]||"")+'</textarea>';
+        ed+='</details>'; }
+      return '<div style="margin-top:10px"><b>'+esc(lbl)+'</b>'+view+ed+'</div>'; }
+    var msgBox='<div class="card apelo"><div class="t">Mensagens de WhatsApp</div>'
       +GRUPOS.map(function(g){ return bloco(g,g); }).join("")
       +bloco("*",GRUPOS.length?"Geral (quando o grupo não tem texto)":"Texto da série")
-      +(u.role==="admin"&&!c.encerrada_em?'<div class="va-sub" style="margin-top:6px">Pode usar {empresa} e {cidade}. O texto vai colado no WhatsApp; o vendedor só confere e envia.</div><button class="btn green sm" onclick="salvarMsg()">Salvar mensagens</button> <span id="msgOk" class="va-sub"></span>':'')
+      +(u.role==="admin"&&!c.encerrada_em?'<div class="va-sub" style="margin-top:6px">Uma mensagem por envio: cada mensagem vira um botão (WhatsApp 1, 2, 3…) no contato. Pode usar {empresa} e {cidade} e *negrito*.</div><button class="btn green sm" onclick="salvarMsg()">Salvar mensagens</button> <span id="msgOk" class="va-sub"></span>':'')
       +'</div>';
     var head='<div class="mrow">'
       +'<div class="metric"><div class="lbl">Trabalhados</div><div class="val">'+trab+' <span style="font-size:14px;color:var(--muted)">/ '+ITENS.length+'</span></div></div>'
@@ -176,7 +180,7 @@ if(u){
         +'<div class="meta">'+esc(x.segmento||"—")+' · '+esc(x.municipio||"")+(x.uf?"/"+esc(x.uf):"")+(extra.length?' · <span style="color:var(--text)">'+esc(extra.join(" · "))+'</span>':'')+'</div>'
         +'<div class="why">'+esc(x.motivo||"")+'</div></div>'
         +'<div class="acts"><span class="et et-'+x.etapa+'">'+ET_LBL[x.etapa]+'</span>'
-        +(x.celular?'<a class="btn sm wa" target="_blank" href="'+waLink(x,c)+'">WhatsApp</a>':(fone?'<span class="meta">'+esc(fone)+'</span>':''))
+        +(x.celular?waBotoes(x,c):(fone?'<span class="meta">'+esc(fone)+'</span>':''))
         +'<a class="btn sm blue" href="contatos.html?doc='+encodeURIComponent(x.documento)+'&serie='+CID+'">Abrir ficha</a></div></div>';
     }).join(""):'<div class="empty">'+(FILTRO==="abertos"?"Série concluída — todos os contatos foram trabalhados. 🎯":"Nada aqui ainda.")+'</div>';
     var rod='<div class="va-sub" style="margin-top:14px;">O andamento é automático: “contactado” vem do registro na ficha; “proposta” e “venda” vêm dos pedidos do Bling lançados depois do início da série (atualiza com a coleta diária).</div>';
@@ -184,21 +188,37 @@ if(u){
   }
   // grupo do contato = segmento sem o prefixo da família (ex.: "Alicate P6C-8" -> "P6C-8")
   function grupoDe(x){ var sg=x.segmento||""; return /^Alicate /.test(sg)?sg.replace(/^Alicate /,""):null; }
-  // link wa.me com o texto do grupo (ou o geral) preenchido ({empresa}, {cidade})
-  function waLink(x,c){
+  // mensagens de um grupo (lista). Formato novo: mensagens[k] = [texto1, texto2, ...]; antigo: string. "*" = geral.
+  function msgsDe(c,k,exato){
+    var MS=c.mensagens||{}, v=MS[k];
+    if(k==="*"&&v==null) v=c.mensagem;
+    if(typeof v==="string") v=[v];
+    v=(v||[]).filter(function(t){return t&&String(t).trim();});
+    if(!v.length&&!exato&&k!=="*") return msgsDe(c,"*",true);
+    return v;
+  }
+  function waLink(x,t){
     var url="https://wa.me/"+waNum(x.celular);
-    if(!c) return url;
-    var g=grupoDe(x), t=(g&&c.mensagens&&c.mensagens[g])||c.mensagem;
     if(!t) return url;
     t=t.replace(/\{empresa\}/g, x.empresa||"").replace(/\{cidade\}/g, x.municipio||"");
     return url+"?text="+encodeURIComponent(t);
   }
+  // um botão por mensagem: o vendedor envia a 1, volta e clica na 2, etc.
+  function waBotoes(x,c){
+    var L=c?msgsDe(c,grupoDe(x)||"*"):[];
+    if(L.length<2) return '<a class="btn sm wa" target="_blank" href="'+waLink(x,L[0])+'">WhatsApp</a>';
+    return L.map(function(t,i){ return '<a class="btn sm wa" target="_blank" title="Mensagem '+(i+1)+'" href="'+waLink(x,t)+'">WhatsApp '+(i+1)+'</a>'; }).join(" ");
+  }
   window.salvarMsg=async function(){
-    var geral=null, map={};
-    document.querySelectorAll(".msgTxt").forEach(function(ta){ var k=ta.getAttribute("data-k"), t=(ta.value||"").trim(); if(k==="*") geral=t||null; else if(t) map[k]=t; });
-    var r=await sb.from("va_campanhas").update({mensagem:geral, mensagens:Object.keys(map).length?map:null}).eq("id",CID);
+    var map={};
+    document.querySelectorAll(".msgTxt").forEach(function(ta){ var k=ta.getAttribute("data-k"), i=+ta.getAttribute("data-i"), t=(ta.value||"").trim();
+      if(!map[k]) map[k]=[]; map[k][i]=t; });
+    Object.keys(map).forEach(function(k){ map[k]=map[k].filter(function(t){return t;}); if(!map[k].length) delete map[k]; });
+    var geral=map["*"]?map["*"][0]:null;
+    var payload={mensagem:geral, mensagens:Object.keys(map).length?map:null};
+    var r=await sb.from("va_campanhas").update(payload).eq("id",CID);
     var ok=$("#msgOk"); if(r.error){ ok.textContent="Erro: "+r.error.message; return; }
-    var cc=camp(CID); cc.mensagem=geral; cc.mensagens=Object.keys(map).length?map:null; render(); 
+    var cc=camp(CID); cc.mensagem=payload.mensagem; cc.mensagens=payload.mensagens; render();
   };
 
   // ---------- Admin: nova série / encerrar
