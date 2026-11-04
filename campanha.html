@@ -143,18 +143,18 @@ if(u){
     // Mensagens de WhatsApp da série: uma por grupo (segmento do contato, ex.: "Alicate P6C-8") ou uma geral.
     // O botão "WhatsApp" de cada contato abre a conversa já com o texto do grupo dele. {empresa} e {cidade} são trocados.
     var GRUPOS=[]; ITENS.forEach(function(x){ var g=grupoDe(x); if(g&&GRUPOS.indexOf(g)<0) GRUPOS.push(g); }); GRUPOS.sort();
-    var MAXM=4;
+    var MAXM=6;
     function bloco(k,lbl){ var L=msgsDe(c,k,true);
-      var view=L.length?L.map(function(t,i){ return '<div style="margin-top:4px"><span class="meta">Mensagem '+(i+1)+'</span><div style="white-space:pre-wrap">'+esc(t)+'</div></div>'; }).join(""):'<div class="va-sub">sem texto — o botão abre a conversa em branco</div>';
+      var view=L.length?L.map(function(t,i){ return '<div style="margin-top:4px"><span class="meta">Versão '+(i+1)+'</span><div style="white-space:pre-wrap">'+esc(t)+'</div></div>'; }).join(""):'<div class="va-sub">sem texto — o botão abre a conversa em branco</div>';
       var ed='';
       if(u.role==="admin"&&!c.encerrada_em){ ed='<details><summary style="cursor:pointer;color:var(--blue)">Editar</summary>';
-        for(var i=0;i<MAXM;i++) ed+='<div class="meta" style="margin-top:6px">Mensagem '+(i+1)+(i?' (opcional)':'')+'</div><textarea data-k="'+esc(k)+'" data-i="'+i+'" class="msgTxt" rows="4" style="width:100%;box-sizing:border-box">'+esc(L[i]||"")+'</textarea>';
+        for(var i=0;i<MAXM;i++) ed+='<div class="meta" style="margin-top:6px">Versão '+(i+1)+(i?' (opcional)':'')+'</div><textarea data-k="'+esc(k)+'" data-i="'+i+'" class="msgTxt" rows="4" style="width:100%;box-sizing:border-box">'+esc(L[i]||"")+'</textarea>';
         ed+='</details>'; }
       return '<div style="margin-top:10px"><b>'+esc(lbl)+'</b>'+view+ed+'</div>'; }
     var msgBox='<div class="card apelo"><div class="t">Mensagens de WhatsApp</div>'
       +GRUPOS.map(function(g){ return bloco(g,g); }).join("")
       +bloco("*",GRUPOS.length?"Geral (quando o grupo não tem texto)":"Texto da série")
-      +(u.role==="admin"&&!c.encerrada_em?'<div class="va-sub" style="margin-top:6px">Uma mensagem por envio: cada mensagem vira um botão (WhatsApp 1, 2, 3…) no contato. Pode usar {empresa} e {cidade} e *negrito*.</div><button class="btn green sm" onclick="salvarMsg()">Salvar mensagens</button> <span id="msgOk" class="va-sub"></span>':'')
+      +(u.role==="admin"&&!c.encerrada_em?'<div class="va-sub" style="margin-top:6px">Uma mensagem por envio: com mais de uma versão, cada contato recebe uma, em rodízio pela posição na fila (1º → versão 1, 2º → versão 2…). Pode usar {empresa} e {cidade} e *negrito*.</div><button class="btn green sm" onclick="salvarMsg()">Salvar mensagens</button> <span id="msgOk" class="va-sub"></span>':'')
       +'</div>';
     var head='<div class="mrow">'
       +'<div class="metric"><div class="lbl">Trabalhados</div><div class="val">'+trab+' <span style="font-size:14px;color:var(--muted)">/ '+ITENS.length+'</span></div></div>'
@@ -203,11 +203,13 @@ if(u){
     t=t.replace(/\{empresa\}/g, x.empresa||"").replace(/\{cidade\}/g, x.municipio||"");
     return url+"?text="+encodeURIComponent(t);
   }
-  // um botão por mensagem: o vendedor envia a 1, volta e clica na 2, etc.
+  // uma mensagem por envio: com várias versões, o contato recebe uma, em rodízio pela posição na fila
+  function versaoDe(x,n){ return ((Number(x.posicao)||1)-1)%n; }
   function waBotoes(x,c){
     var L=c?msgsDe(c,grupoDe(x)||"*"):[];
     if(L.length<2) return '<a class="btn sm wa" target="_blank" href="'+waLink(x,L[0])+'">WhatsApp</a>';
-    return L.map(function(t,i){ return '<a class="btn sm wa" target="_blank" title="Mensagem '+(i+1)+'" href="'+waLink(x,t)+'">WhatsApp '+(i+1)+'</a>'; }).join(" ");
+    var v=versaoDe(x,L.length);
+    return '<a class="btn sm wa" target="_blank" title="Versão '+(v+1)+' de '+L.length+'" href="'+waLink(x,L[v])+'">WhatsApp · v'+(v+1)+'</a>';
   }
   window.salvarMsg=async function(){
     var map={};
