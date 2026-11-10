@@ -28,6 +28,7 @@
   .et-proposta{color:#a371f7;border-color:#a371f7;} .et-venda{color:var(--green);border-color:var(--green);} .et-descartado{color:var(--muted2);}
   .btn.sm{font-size:12px;padding:5px 10px;}
   .wa{color:var(--green);border-color:var(--green);}
+  .wa.enviado{color:var(--muted);border-color:var(--border);font-size:11px;padding:3px 7px;opacity:.75;}
   .nova{margin-top:22px;}
   .nova h3{font-size:14px;font-weight:600;margin-bottom:2px;}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
@@ -62,7 +63,7 @@
 var u=VA.montar("campanha.html");
 if(u){
   var sb=VA.sb, esc=VA.esc, brl=VA.brl, waNum=VA.waNum, $=function(s){return document.querySelector(s);};
-  var CAMPS=[], CID=null, ITENS=[], FILTRO="abertos";
+  var CAMPS=[], CID=null, ITENS=[], ENV={}, FILTRO="abertos";
   var ET_LBL={pendente:"A fazer",tentado:"Tentado",contactado:"Contactado",proposta:"Proposta",venda:"Venda",descartado:"Descartado"};
   var TIPOS={top_chance:"Recompra (maior chance de venda)",orcamento:"Orçamento sem sucesso",produto:"Produto / segmento",sumiu_preco_novo:"Sumiu antes do preço novo",grandes_ml:"Grandes do Mercado Livre"};
   function fmtD(s){ if(!s) return ""; s=String(s);
@@ -128,7 +129,11 @@ if(u){
     $("#sub").textContent=(c.descricao||"")+" Início em "+fmtD(c.criada_em)+(c.encerrada_em?" · encerrada em "+fmtD(c.encerrada_em):"")+".";
     var r=await sb.from("vw_campanha_itens").select("*").eq("campanha_id",CID).order("posicao").limit(1000);
     if(r.error){ $("#body").innerHTML='<div class="card">Erro: '+esc(r.error.message)+'</div>'; return; }
-    ITENS=r.data||[]; render();
+    ITENS=r.data||[];
+    // quem já teve o botão WhatsApp clicado nesta série
+    ENV={}; var e=await sb.from("va_wa_envios").select("documento,enviado_em").eq("campanha_id",CID).order("enviado_em");
+    (e.data||[]).forEach(function(x){ ENV[x.documento]=x.enviado_em; });
+    render();
   }
 
   function cnt(e){ return ITENS.filter(function(x){return x.etapa===e;}).length; }
@@ -207,10 +212,19 @@ if(u){
   function versaoDe(x,n){ return ((Number(x.posicao)||1)-1)%n; }
   function waBotoes(x,c){
     var L=c?msgsDe(c,grupoDe(x)||"*"):[];
-    if(L.length<2) return '<a class="btn sm wa" target="_blank" href="'+waLink(x,L[0])+'">WhatsApp</a>';
-    var v=versaoDe(x,L.length);
-    return '<a class="btn sm wa" target="_blank" title="Versão '+(v+1)+' de '+L.length+'" href="'+waLink(x,L[v])+'">WhatsApp · v'+(v+1)+'</a>';
+    var v=L.length<2?0:versaoDe(x,L.length), env=ENV[x.documento];
+    var lbl=env?'✓ enviado '+fmtD(env):(L.length<2?'WhatsApp':'WhatsApp · v'+(v+1));
+    var tit=env?'WhatsApp já aberto em '+fmtD(env)+' — clique para abrir de novo':(L.length<2?'':'Versão '+(v+1)+' de '+L.length);
+    return '<a class="btn sm wa'+(env?' enviado':'')+'" target="_blank" title="'+esc(tit)+'" href="'+waLink(x,L[v])+'" onclick="marcarWa(\''+esc(x.documento)+'\','+(L.length<2?'null':(v+1))+')">'+lbl+'</a>';
   }
+  // registra o clique no WhatsApp (não conta como contato registrado na ficha) e muda o botão
+  window.marcarWa=function(doc,versao){
+    var jaTinha=!!ENV[doc];
+    ENV[doc]=new Date().toISOString();
+    setTimeout(render,300);
+    if(jaTinha) return;
+    sb.from("va_wa_envios").insert({campanha_id:CID,documento:doc,vendedor:u.nome,versao:versao}).then(function(r){ if(r.error) console.warn("va_wa_envios",r.error.message); });
+  };
   window.salvarMsg=async function(){
     var map={};
     document.querySelectorAll(".msgTxt").forEach(function(ta){ var k=ta.getAttribute("data-k"), i=+ta.getAttribute("data-i"), t=(ta.value||"").trim();
